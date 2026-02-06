@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Base URL - change this to your deployed backend URL
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -41,7 +41,7 @@ export const accountAPI = {
 
   // Create account
   createAccount: (data) => api.post("/accounts", data),
-  
+
   // Delete account
   deleteAccount: (id) => api.delete(`/accounts/${id}`),
 
