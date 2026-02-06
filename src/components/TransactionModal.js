@@ -24,6 +24,19 @@ const TransactionModal = ({ isOpen, onClose, onSubmit, editTransaction }) => {
     "OTHER",
   ];
 
+  // Define resetForm BEFORE using it in useEffect
+  const resetForm = useCallback(() => {
+    setFormData({
+      type: activeTab === "income" ? "INCOME" : "EXPENSE",
+      amount: "",
+      description: "",
+      category: "",
+      division: "PERSONAL",
+      date: new Date(),
+    });
+  }, [activeTab]);
+
+  // Now useEffect can safely use resetForm
   useEffect(() => {
     if (editTransaction) {
       setFormData({
@@ -38,20 +51,7 @@ const TransactionModal = ({ isOpen, onClose, onSubmit, editTransaction }) => {
     } else {
       resetForm();
     }
-  },[editTransaction, isOpen, resetForm]
-);
-
- const resetForm = useCallback(() => {
-   setFormData({
-     type: activeTab === "income" ? "INCOME" : "EXPENSE",
-     amount: "",
-     description: "",
-     category: "",
-     division: "PERSONAL",
-     date: new Date(),
-   });
- }, [activeTab]);
-
+  }, [editTransaction, isOpen, resetForm]);
 
   useEffect(() => {
     if (!editTransaction) {
