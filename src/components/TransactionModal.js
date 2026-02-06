@@ -1,21 +1,28 @@
-import React, { useState, useEffect } from 'react';
-import DatePicker from 'react-datepicker';
-import 'react-datepicker/dist/react-datepicker.css';
-import { FaTimes } from 'react-icons/fa';
+import React, { useState, useEffect, useCallback } from "react";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
+import { FaTimes } from "react-icons/fa";
 
 const TransactionModal = ({ isOpen, onClose, onSubmit, editTransaction }) => {
-  const [activeTab, setActiveTab] = useState('income');
+  const [activeTab, setActiveTab] = useState("income");
   const [formData, setFormData] = useState({
-    type: 'INCOME',
-    amount: '',
-    description: '',
-    category: '',
-    division: 'PERSONAL',
+    type: "INCOME",
+    amount: "",
+    description: "",
+    category: "",
+    division: "PERSONAL",
     date: new Date(),
   });
 
-  const incomeCategories = ['SALARY', 'FREELANCE', 'INVESTMENT', 'OTHER'];
-  const expenseCategories = ['FUEL', 'MOVIE', 'FOOD', 'LOAN', 'MEDICAL', 'OTHER'];
+  const incomeCategories = ["SALARY", "FREELANCE", "INVESTMENT", "OTHER"];
+  const expenseCategories = [
+    "FUEL",
+    "MOVIE",
+    "FOOD",
+    "LOAN",
+    "MEDICAL",
+    "OTHER",
+  ];
 
   useEffect(() => {
     if (editTransaction) {
@@ -27,29 +34,31 @@ const TransactionModal = ({ isOpen, onClose, onSubmit, editTransaction }) => {
         division: editTransaction.division,
         date: new Date(editTransaction.date),
       });
-      setActiveTab(editTransaction.type === 'INCOME' ? 'income' : 'expense');
+      setActiveTab(editTransaction.type === "INCOME" ? "income" : "expense");
     } else {
       resetForm();
     }
-  }, [editTransaction, isOpen]);
+  },[editTransaction, isOpen, resetForm]
+);
 
-  const resetForm = () => {
-    setFormData({
-      type: activeTab === 'income' ? 'INCOME' : 'EXPENSE',
-      amount: '',
-      description: '',
-      category: '',
-      division: 'PERSONAL',
-      date: new Date(),
-    });
-  };
+ const resetForm = useCallback(() => {
+   setFormData({
+     type: activeTab === "income" ? "INCOME" : "EXPENSE",
+     amount: "",
+     description: "",
+     category: "",
+     division: "PERSONAL",
+     date: new Date(),
+   });
+ }, [activeTab]);
+
 
   useEffect(() => {
     if (!editTransaction) {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        type: activeTab === 'income' ? 'INCOME' : 'EXPENSE',
-        category: '',
+        type: activeTab === "income" ? "INCOME" : "EXPENSE",
+        category: "",
       }));
     }
   }, [activeTab, editTransaction]);
@@ -67,7 +76,8 @@ const TransactionModal = ({ isOpen, onClose, onSubmit, editTransaction }) => {
 
   if (!isOpen) return null;
 
-  const categories = activeTab === 'income' ? incomeCategories : expenseCategories;
+  const categories =
+    activeTab === "income" ? incomeCategories : expenseCategories;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 modal-overlay animate-fade-in">
