@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { transactionAPI, accountAPI } from "./services/api";
 import { getToken, setAuthHeader, logout } from "./services/authService";
 import DashboardCards from "./components/DashboardCards";
@@ -75,12 +75,12 @@ function App() {
       fetchDashboardData();
       fetchAccounts();
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, fetchDashboardData, fetchAccounts]);
 
   // ─────────────────────────────────────────────
   //  DATA FETCHING
   // ─────────────────────────────────────────────
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -97,16 +97,16 @@ function App() {
     } finally {
       setLoading(false);
     }
-  };
+  });
 
-  const fetchAccounts = async () => {
+  const fetchAccounts = useCallback( async () => {
     try {
       const response = await accountAPI.getAllAccounts();
       setAccounts(response.data);
     } catch (err) {
       if (err.response?.status === 401) handleLogout();
     }
-  };
+  });
 
   // ─────────────────────────────────────────────
   //  AUTH HANDLERS
