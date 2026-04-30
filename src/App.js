@@ -70,13 +70,7 @@ function App() {
   }, []);
 
   // ── Fetch data only when authenticated ──────
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchDashboardData();
-      fetchAccounts();
-    }
-  }, [isAuthenticated, fetchDashboardData, fetchAccounts]);
-
+ 
   // ─────────────────────────────────────────────
   //  DATA FETCHING
   // ─────────────────────────────────────────────
@@ -97,16 +91,24 @@ function App() {
     } finally {
       setLoading(false);
     }
-  });
+  },[]);
 
-  const fetchAccounts = useCallback( async () => {
+  const fetchAccounts = useCallback(async () => {
     try {
       const response = await accountAPI.getAllAccounts();
       setAccounts(response.data);
     } catch (err) {
       if (err.response?.status === 401) handleLogout();
     }
-  });
+  },[]);
+
+   useEffect(() => {
+     if (isAuthenticated) {
+       fetchDashboardData();
+       fetchAccounts();
+     }
+   }, [isAuthenticated, fetchDashboardData, fetchAccounts]);
+
 
   // ─────────────────────────────────────────────
   //  AUTH HANDLERS
