@@ -336,12 +336,12 @@ function App() {
 
       {/* ── MAIN CONTENT ── */}
       <main className="max-w-7xl mx-auto px-6 py-10 space-y-10">
-        {/* <button
+        <button
           onClick={() => showToast("Test working 🎉", "success")}
           className="mb-4 px-4 py-2 bg-blue-600 rounded-lg text-white"
         >
           Test Toast
-        </button> */}
+        </button>
         {/* Error banner */}
         {error && (
           <div className="bg-red-900/30 border border-red-700 text-red-300 px-5 py-4 rounded-xl flex justify-between items-center">
