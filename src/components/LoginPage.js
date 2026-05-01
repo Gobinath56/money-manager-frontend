@@ -25,7 +25,7 @@ const FEATURES = [
   },
 ];
 
-// ── Input field — reusable styled component ────────────────────────────────
+// ── Reusable styled input field ────────────────────────────────────────────
 function Field({ label, type = "text", value, onChange, placeholder, hint }) {
   const [focused, setFocused] = useState(false);
   return (
@@ -84,7 +84,8 @@ function Field({ label, type = "text", value, onChange, placeholder, hint }) {
   );
 }
 
-// ── Password strength indicator (register mode only) ──────────────────────
+// ── Password strength indicator — register mode only ───────────────────────
+// score: 1 = Weak, 2 = Medium, 3 = Strong
 function PasswordStrength({ password }) {
   const checks = [
     { label: "6+ characters", pass: password.length >= 6 },
@@ -93,29 +94,50 @@ function PasswordStrength({ password }) {
   ];
   const score = checks.filter((c) => c.pass).length;
   const colors = ["#EF4444", "#F59E0B", "#10B981"];
-  const labels = ["Weak", "Medium", "Strong"];
+  const strengthLabels = ["Weak", "Medium", "Strong"]; // used below in the label span
 
   if (!password) return null;
 
   return (
     <div style={{ marginTop: -10, marginBottom: 18 }}>
-      {/* Strength bar */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
-        {[0, 1, 2].map((i) => (
-          <div
-            key={i}
-            style={{
-              flex: 1,
-              height: 3,
-              borderRadius: 999,
-              background:
-                i < score ? colors[score - 1] : "rgba(255,255,255,0.08)",
-              transition: "background 0.3s",
-            }}
-          />
-        ))}
+      {/* Strength bar + text label */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          marginBottom: 8,
+        }}
+      >
+        <div style={{ display: "flex", gap: 4, flex: 1 }}>
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              style={{
+                flex: 1,
+                height: 3,
+                borderRadius: 999,
+                background:
+                  i < score ? colors[score - 1] : "rgba(255,255,255,0.08)",
+                transition: "background 0.3s",
+              }}
+            />
+          ))}
+        </div>
+        {/* strengthLabels IS used here — shows "Weak" / "Medium" / "Strong" */}
+        <span
+          style={{
+            fontSize: 11,
+            fontWeight: 500,
+            minWidth: 46,
+            color: score > 0 ? colors[score - 1] : "rgba(255,255,255,0.2)",
+          }}
+        >
+          {score > 0 ? strengthLabels[score - 1] : ""}
+        </span>
       </div>
-      {/* Check labels */}
+
+      {/* Individual check labels */}
       <div style={{ display: "flex", gap: 12 }}>
         {checks.map((c) => (
           <span
@@ -137,7 +159,7 @@ function PasswordStrength({ password }) {
   );
 }
 
-// ── Main LoginPage component ───────────────────────────────────────────────
+// ── Main component ─────────────────────────────────────────────────────────
 export default function LoginPage({ onSuccess }) {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
@@ -146,10 +168,11 @@ export default function LoginPage({ onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  // Animate card in on mount
+  // Slide-up animation — flips to true after 50ms so CSS transition plays
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
-    setTimeout(() => setMounted(true), 50);
+    const t = setTimeout(() => setMounted(true), 50);
+    return () => clearTimeout(t);
   }, []);
 
   const handleSubmit = async (e) => {
@@ -163,9 +186,8 @@ export default function LoginPage({ onSuccess }) {
 
       // Brief success flash before handing off to App
       setSuccess(true);
-      setTimeout(() => onSuccess(data.token, data.email), 600);
+      setTimeout(() => onSuccess(data.token, data.email), 700);
     } catch (err) {
-      // err.response.data.message comes from Spring's GlobalExceptionHandler
       setError(
         err.response?.data?.message ||
           err.response?.data?.error ||
@@ -176,7 +198,7 @@ export default function LoginPage({ onSuccess }) {
   };
 
   const switchMode = () => {
-    setIsLogin(!isLogin);
+    setIsLogin((prev) => !prev);
     setError("");
     setPassword("");
   };
@@ -191,12 +213,9 @@ export default function LoginPage({ onSuccess }) {
         overflow: "hidden",
       }}
     >
-      {/* ════════════════════════════════════════
-          LEFT PANEL — branding + feature list
-          Hidden on small screens via a media
-          query would be ideal, but inline styles
-          can't do that — just set minWidth here.
-      ════════════════════════════════════════ */}
+      {/* ══════════════════════════════════════
+          LEFT PANEL — branding + features
+      ══════════════════════════════════════ */}
       <div
         style={{
           width: 420,
@@ -239,8 +258,8 @@ export default function LoginPage({ onSuccess }) {
           }}
         />
 
-        {/* Brand */}
         <div>
+          {/* Brand */}
           <div
             style={{
               display: "flex",
@@ -287,12 +306,13 @@ export default function LoginPage({ onSuccess }) {
             </div>
           </div>
 
+          {/* Tagline */}
           <h2
             style={{
               fontSize: 28,
               fontWeight: 600,
               color: "#F0F4FF",
-              lineHeight: 1.3,
+              lineHeight: 1.35,
               letterSpacing: "-0.5px",
               marginBottom: 14,
             }}
@@ -375,9 +395,9 @@ export default function LoginPage({ onSuccess }) {
         </div>
       </div>
 
-      {/* ════════════════════════════════════════
+      {/* ══════════════════════════════════════
           RIGHT PANEL — auth form
-      ════════════════════════════════════════ */}
+      ══════════════════════════════════════ */}
       <div
         style={{
           flex: 1,
@@ -420,7 +440,7 @@ export default function LoginPage({ onSuccess }) {
               : "Start tracking your finances today"}
           </p>
 
-          {/* ── Tab switcher ── */}
+          {/* Tab switcher */}
           <div
             style={{
               display: "flex",
@@ -463,13 +483,7 @@ export default function LoginPage({ onSuccess }) {
 
           {/* ── Success state ── */}
           {success ? (
-            <div
-              style={{
-                textAlign: "center",
-                padding: "48px 0",
-                animation: "fadeIn 0.3s ease",
-              }}
-            >
+            <div style={{ textAlign: "center", padding: "48px 0" }}>
               <div
                 style={{
                   width: 56,
@@ -502,7 +516,7 @@ export default function LoginPage({ onSuccess }) {
             </div>
           ) : (
             <>
-              {/* ── Error banner ── */}
+              {/* Error banner */}
               {error && (
                 <div
                   style={{
@@ -528,7 +542,7 @@ export default function LoginPage({ onSuccess }) {
                 </div>
               )}
 
-              {/* ── Form ── */}
+              {/* Form */}
               <form onSubmit={handleSubmit}>
                 <Field
                   label="Email address"
@@ -547,10 +561,10 @@ export default function LoginPage({ onSuccess }) {
                   hint={!isLogin ? "min. 6 characters" : ""}
                 />
 
-                {/* Password strength — only in register mode */}
+                {/* Password strength — register mode only */}
                 {!isLogin && <PasswordStrength password={password} />}
 
-                {/* Submit button */}
+                {/* Submit */}
                 <button
                   type="submit"
                   disabled={loading}
@@ -634,6 +648,7 @@ export default function LoginPage({ onSuccess }) {
                     textAlign: "center",
                     fontSize: 13,
                     color: "rgba(255,255,255,0.3)",
+                    margin: 0,
                   }}
                 >
                   {isLogin ? "New here? " : "Already have an account? "}
@@ -659,7 +674,7 @@ export default function LoginPage({ onSuccess }) {
         </div>
       </div>
 
-      {/* ── Keyframe animations ── */}
+      {/* Global keyframes — spin for loading button, fadeIn for success */}
       <style>{`
         @keyframes spin {
           to { transform: rotate(360deg); }
@@ -668,7 +683,9 @@ export default function LoginPage({ onSuccess }) {
           from { opacity: 0; transform: scale(0.95); }
           to   { opacity: 1; transform: scale(1); }
         }
-        input::placeholder { color: rgba(255,255,255,0.2); }
+        input::placeholder {
+          color: rgba(255,255,255,0.2);
+        }
       `}</style>
     </div>
   );
