@@ -9,6 +9,7 @@ import CategorySummary from "./components/CategorySummary";
 import AccountTransferModal from "./components/AccountTransferModal";
 import IncomeExpenseChart from "./components/IncomeExpenseChart";
 import LoginPage from "./components/LoginPage";
+import Toast from "./components/Toast";
 import {
   FaPlus,
   FaExchangeAlt,
@@ -58,7 +59,7 @@ function App() {
   const [editTransaction, setEditTransaction] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-
+  const [toast, setToast] = useState(null);
   // ── Restore JWT into Axios headers on page refresh ──
   // This runs once on mount. Without it, refreshing the page loses the token
   // from Axios even though it's still in localStorage.
@@ -109,7 +110,13 @@ function App() {
      }
    }, [isAuthenticated, fetchDashboardData, fetchAccounts]);
 
+  const showToast = (message, type = "success") => {
+    setToast({ message, type });
 
+    setTimeout(() => {
+     setToast(null);
+     }, 3000);
+   };
   // ─────────────────────────────────────────────
   //  AUTH HANDLERS
   // ─────────────────────────────────────────────
@@ -329,6 +336,12 @@ function App() {
 
       {/* ── MAIN CONTENT ── */}
       <main className="max-w-7xl mx-auto px-6 py-10 space-y-10">
+        {/* <button
+          onClick={() => showToast("Test working 🎉", "success")}
+          className="mb-4 px-4 py-2 bg-blue-600 rounded-lg text-white"
+        >
+          Test Toast
+        </button> */}
         {/* Error banner */}
         {error && (
           <div className="bg-red-900/30 border border-red-700 text-red-300 px-5 py-4 rounded-xl flex justify-between items-center">
@@ -436,6 +449,13 @@ function App() {
         <CreateAccountModal
           onClose={() => setIsCreateAccountModalOpen(false)}
           onSubmit={handleCreateAccount}
+        />
+      )}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
         />
       )}
     </div>
