@@ -48,5 +48,12 @@ export const accountAPI = {
   // Transfer between accounts
   transfer: (data) => api.post("/accounts/transfer", data),
 };
-
+// Add this to api.js
+export const recurringAPI = {
+    getAll:    ()       => api.get("/recurring"),
+    create:    (data)   => api.post("/recurring", data),
+    toggle:    (id)     => api.patch(`/recurring/${id}/toggle`),
+    runNow:    (id)     => api.post(`/recurring/${id}/run`),
+    delete:    (id)     => api.delete(`/recurring/${id}`),
+};
 export default api;
