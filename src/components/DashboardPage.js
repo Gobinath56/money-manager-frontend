@@ -40,6 +40,16 @@ const CAT_COLORS = {
   OTHER: "#6B7280",
 };
 
+// Account colour cycle — each account card gets a distinct accent
+const ACCOUNT_ACCENTS = [
+  "#63B3FF",
+  "#10B981",
+  "#8B5CF6",
+  "#F59E0B",
+  "#EC4899",
+  "#6366F1",
+];
+
 const card = {
   background: "#0D1117",
   border: "1px solid rgba(255,255,255,0.07)",
@@ -91,19 +101,13 @@ const ChartTip = ({ active, payload, label }) => {
 export default function DashboardPage({
   dashboardData,
   transactions,
+  accounts = [],
   loading,
 }) {
-  // ─────────────────────────────────────────────────────────────────────────
-  //  ALL HOOKS MUST BE HERE — before any conditional return
-  //
-  //  React Rule: hooks must be called in the same order on every render.
-  //  If useMemo was after "if (!dashboardData) return null", React would
-  //  call it on some renders and skip it on others → breaks the hook order.
-  //  Solution: always call hooks at the top, use empty fallbacks for null data.
-  // ─────────────────────────────────────────────────────────────────────────
+  // ── ALL hooks at the top — before any conditional return ──────────────────
+  // React rule: hooks must be called in the same order every render.
+  // Putting useMemo after an early return breaks this rule.
 
-  // Build 6-month chart data — runs even when dashboardData is null,
-  // but transactions will be [] so buckets stay at zero. Safe.
   const monthlyChartData = useMemo(() => {
     const now = new Date();
     const buckets = Array.from({ length: 6 }, (_, i) => {
@@ -116,7 +120,6 @@ export default function DashboardPage({
         year: d.getFullYear(),
       };
     });
-
     transactions.forEach((t) => {
       const d = new Date(t.date);
       const idx = buckets.findIndex(
@@ -126,14 +129,12 @@ export default function DashboardPage({
       if (t.type === "INCOME") buckets[idx].Income += t.amount;
       if (t.type === "EXPENSE") buckets[idx].Expense += t.amount;
     });
-
     return buckets;
-  }, [transactions]); // recalculates only when transactions changes
+  }, [transactions]);
 
-  // Pie chart data — same pattern, safe with empty categorySummary
   const pieData = useMemo(() => {
-    const categorySummary = dashboardData?.categorySummary || {};
-    return Object.entries(categorySummary)
+    const summary = dashboardData?.categorySummary || {};
+    return Object.entries(summary)
       .map(([cat, val]) => ({
         name: cat,
         value: val,
@@ -142,12 +143,14 @@ export default function DashboardPage({
       .filter((d) => d.value > 0)
       .sort((a, b) => b.value - a.value)
       .slice(0, 6);
-  }, [dashboardData]); // recalculates only when dashboardData changes
+  }, [dashboardData]);
 
-  // ─────────────────────────────────────────────────────────────────────────
-  //  Early returns AFTER all hooks — this is now safe
-  // ─────────────────────────────────────────────────────────────────────────
+  // Net worth = sum of all account balances
+  const netWorth = useMemo(() => {
+    return accounts.reduce((sum, a) => sum + (a.balance || 0), 0);
+  }, [accounts]);
 
+  // ── Early returns AFTER all hooks ─────────────────────────────────────────
   if (loading && !dashboardData) {
     return (
       <div
@@ -182,9 +185,6 @@ export default function DashboardPage({
 
   if (!dashboardData) return null;
 
-  // ─────────────────────────────────────────────────────────────────────────
-  //  Destructure data — safe now because we returned above if null
-  // ─────────────────────────────────────────────────────────────────────────
   const {
     totalIncome = 0,
     totalExpenditure = 0,
@@ -196,13 +196,13 @@ export default function DashboardPage({
 
   return (
     <div style={{ padding: "36px 40px", minHeight: "100vh", color: "#E8EDF5" }}>
-      {/* ── Header ── */}
+      {/* ── Page header ── */}
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "flex-start",
-          marginBottom: 32,
+          marginBottom: 28,
         }}
       >
         <div>
@@ -237,7 +237,152 @@ export default function DashboardPage({
         </button>
       </div>
 
-      {/* ── 4 stat cards ── */}
+      {/* ══════════════════════════════════════════════════════════════════
+          ACCOUNTS ROW
+          Shows each real-world account with its current balance.
+          Balances update automatically as transactions are added/deleted.
+          Last card shows total net worth (sum of all accounts).
+      ══════════════════════════════════════════════════════════════════ */}
+      {accounts.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 500,
+              color: "rgba(255,255,255,0.3)",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              marginBottom: 12,
+            }}
+          >
+            Your Accounts
+          </div>
+          <div
+            style={{
+              display: "grid",
+              // Auto-fit: shows up to 5 accounts + 1 net worth card
+              gridTemplateColumns: `repeat(${Math.min(accounts.length + 1, 5)}, 1fr)`,
+              gap: 12,
+            }}
+          >
+            {/* Individual account cards */}
+            {accounts.map((acc, i) => {
+              const accent = ACCOUNT_ACCENTS[i % ACCOUNT_ACCENTS.length];
+              return (
+                <div
+                  key={acc.id}
+                  style={{
+                    background: "#0D1117",
+                    border: `1px solid ${accent}22`,
+                    borderLeft: `3px solid ${accent}`,
+                    borderRadius: 14,
+                    padding: "16px 18px",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 500,
+                      color: "rgba(255,255,255,0.3)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.08em",
+                      marginBottom: 8,
+                    }}
+                  >
+                    {acc.name}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 22,
+                      fontWeight: 600,
+                      color: accent,
+                      letterSpacing: "-0.5px",
+                    }}
+                  >
+                    {formatCurrency(acc.balance)}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: "rgba(255,255,255,0.2)",
+                      marginTop: 4,
+                    }}
+                  >
+                    Current balance
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Net worth card — sum of all accounts */}
+            <div
+              style={{
+                background: "#0D1117",
+                border: "1px solid rgba(16,185,129,0.2)",
+                borderLeft: "3px solid #10B981",
+                borderRadius: 14,
+                padding: "16px 18px",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 10,
+                  fontWeight: 500,
+                  color: "rgba(255,255,255,0.3)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                  marginBottom: 8,
+                }}
+              >
+                Net Worth
+              </div>
+              <div
+                style={{
+                  fontSize: 22,
+                  fontWeight: 600,
+                  color: "#10B981",
+                  letterSpacing: "-0.5px",
+                }}
+              >
+                {formatCurrency(netWorth)}
+              </div>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "rgba(255,255,255,0.2)",
+                  marginTop: 4,
+                }}
+              >
+                All accounts combined
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* No accounts prompt */}
+      {accounts.length === 0 && (
+        <div
+          style={{
+            background: "rgba(245,158,11,0.08)",
+            border: "1px solid rgba(245,158,11,0.2)",
+            borderRadius: 12,
+            padding: "14px 18px",
+            fontSize: 13,
+            color: "#F59E0B",
+            marginBottom: 24,
+            lineHeight: 1.6,
+          }}
+        >
+          ⚠ You have no accounts yet. Create accounts like UPI, Cash, Bank,
+          Savings to track balances automatically.
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════
+          GLOBAL STAT CARDS
+          These show totals across ALL transactions regardless of account.
+      ══════════════════════════════════════════════════════════════════ */}
       <div
         style={{
           display: "grid",
@@ -251,7 +396,7 @@ export default function DashboardPage({
             label: "Total Balance",
             value: balance,
             accent: balance >= 0 ? "#10B981" : "#EF4444",
-            sub: "All time net",
+            sub: "Income − Expenses",
             isCount: false,
           },
           {
@@ -400,14 +545,8 @@ export default function DashboardPage({
         ))}
       </div>
 
-      {/* ── Charts row ── */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "2fr 1fr",
-          gap: 18,
-        }}
-      >
+      {/* ── Charts ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 18 }}>
         {/* Area chart */}
         <div style={card}>
           <div style={cardTitle}>Income vs Expense — 6 months</div>

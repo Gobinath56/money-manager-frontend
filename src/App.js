@@ -12,12 +12,10 @@ import TransactionModal from "./components/TransactionModal";
 import AccountTransferModal from "./components/AccountTransferModal";
 import Toast from "./components/Toast";
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  HELPER — decode JWT payload without any library
-//  JWT format: "header.payload.signature"
-//  payload is base64url-encoded JSON → atob() decodes → JSON.parse() reads it
-//  "sub" claim = the email we set in JwtService.generateToken(email)
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Decode JWT payload without any library ─────────────────────────────────
+// JWT = "header.payload.signature"
+// payload is base64url JSON → atob() decodes → JSON.parse reads it
+// "sub" claim = email set in JwtService.generateToken(email)
 function getEmailFromToken(token) {
   try {
     return JSON.parse(atob(token.split(".")[1])).sub;
@@ -26,9 +24,6 @@ function getEmailFromToken(token) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  ROOT APP
-// ─────────────────────────────────────────────────────────────────────────────
 export default function App() {
   // ── Auth ───────────────────────────────────────────────────────────────────
   const [isAuthenticated, setIsAuthenticated] = useState(!!getToken());
@@ -49,29 +44,29 @@ export default function App() {
   // ── Modals ─────────────────────────────────────────────────────────────────
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [isCreateAccountModalOpen, setIsCreateAccountModalOpen] =
+    useState(false);
   const [editTransaction, setEditTransaction] = useState(null);
 
   // ── Toast ──────────────────────────────────────────────────────────────────
-  // null = hidden. { message, type } = visible.
-  // type is "success" | "error" | "info"
   const [toast, setToast] = useState(null);
 
-  // showToast is passed down to every page as a prop.
-  // Pages call showToast("message") instead of window.alert("message").
+  // showToast is the replacement for window.alert() across the whole app.
+  // Pass it as a prop to every page — they call it instead of alert().
   const showToast = (message, type = "success") => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3500);
   };
 
   // ── Restore Axios header on page refresh ───────────────────────────────────
-  // localStorage keeps the token alive across refreshes,
-  // but Axios headers reset. This re-attaches it once on mount.
+  // localStorage keeps the token but Axios headers reset on refresh.
+  // This re-attaches the token to Axios once on mount.
   useEffect(() => {
     const token = getToken();
     if (token) setAuthHeader(token);
   }, []);
 
-  // ── Fetch data once authenticated ──────────────────────────────────────────
+  // ── Fetch data when authenticated ──────────────────────────────────────────
   useEffect(() => {
     if (isAuthenticated) {
       fetchDashboardData();
@@ -97,6 +92,11 @@ export default function App() {
     }
   };
 
+  // fetchAccounts is called:
+  //   1. On login
+  //   2. After creating/deleting an account
+  //   3. After a transfer (balances change)
+  //   4. After any transaction (balances change)
   const fetchAccounts = async () => {
     try {
       const res = await accountAPI.getAllAccounts();
@@ -133,14 +133,16 @@ export default function App() {
     try {
       if (editTransaction) {
         await transactionAPI.updateTransaction(editTransaction.id, formData);
-        showToast("Transaction updated successfully");
+        showToast("Transaction updated");
       } else {
         await transactionAPI.createTransaction(formData);
-        showToast("Transaction added successfully");
+        showToast("Transaction added");
       }
       setEditTransaction(null);
       setIsTransactionModalOpen(false);
+      // Refresh BOTH dashboard AND accounts — account balances changed
       fetchDashboardData();
+      fetchAccounts();
     } catch (err) {
       if (err.response?.status === 401) handleLogout();
       else
@@ -155,7 +157,9 @@ export default function App() {
     try {
       await transactionAPI.deleteTransaction(id);
       showToast("Transaction deleted");
+      // Refresh both — deleting reverses the balance change
       fetchDashboardData();
+      fetchAccounts();
     } catch (err) {
       if (err.response?.status === 401) handleLogout();
       else showToast("Failed to delete transaction", "error");
@@ -168,7 +172,41 @@ export default function App() {
   };
 
   // ─────────────────────────────────────────────────────────────────────────
-  //  GATE — show LoginPage if not logged in
+  //  ACCOUNT HANDLERS
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const handleCreateAccount = async ({ name, balance }) => {
+    try {
+      await accountAPI.createAccount({
+        name,
+        balance: parseFloat(balance) || 0,
+      });
+      showToast(`Account "${name}" created`);
+      setIsCreateAccountModalOpen(false);
+      fetchAccounts();
+    } catch (err) {
+      if (err.response?.status === 401) handleLogout();
+      else
+        showToast(
+          err.response?.data?.message || "Failed to create account",
+          "error",
+        );
+    }
+  };
+
+  const handleDeleteAccount = async (id, name) => {
+    try {
+      await accountAPI.deleteAccount(id);
+      showToast(`Account "${name}" deleted`);
+      fetchAccounts();
+    } catch (err) {
+      if (err.response?.status === 401) handleLogout();
+      else showToast("Failed to delete account", "error");
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  //  GATE
   // ─────────────────────────────────────────────────────────────────────────
   if (!isAuthenticated) {
     return <LoginPage onSuccess={handleLoginSuccess} />;
@@ -176,13 +214,12 @@ export default function App() {
 
   // ─────────────────────────────────────────────────────────────────────────
   //  PAGE ROUTER
-  //  sharedProps is spread into every page component.
-  //  Each page only reads what it needs — extras are ignored by React.
+  //  sharedProps spreads into every page — each uses only what it needs.
   // ─────────────────────────────────────────────────────────────────────────
   const sharedProps = {
     dashboardData,
     transactions,
-    accounts,
+    accounts, // ← accounts now passed to every page
     loading,
     showToast,
     onEdit: handleEditTransaction,
@@ -203,16 +240,19 @@ export default function App() {
         return <BudgetPage {...sharedProps} />;
       case "recurring":
         return (
-          <RecurringPage showToast={showToast} onRefresh={fetchDashboardData} />
+          <RecurringPage
+            showToast={showToast}
+            onRefresh={() => {
+              fetchDashboardData();
+              fetchAccounts();
+            }}
+          />
         );
       default:
         return <DashboardPage {...sharedProps} />;
     }
   };
 
-  // ─────────────────────────────────────────────────────────────────────────
-  //  RENDER
-  // ─────────────────────────────────────────────────────────────────────────
   return (
     <div
       style={{
@@ -224,28 +264,29 @@ export default function App() {
     >
       {/* ── SIDEBAR ──────────────────────────────────────────────────────── */}
       {/*
-        Fixed left panel — 240px wide.
-        Contains: brand, Add Transaction button, nav items, user footer.
-        setActivePage is called when user clicks a nav item →
-        triggers renderPage() to swap the right panel content.
+        Sidebar now also handles account management:
+        - Shows all accounts with balances
+        - Create account button
+        - Delete account button
+        - Transfer button
+        All account actions trigger fetchAccounts() to refresh balances.
       */}
       <Sidebar
         activePage={activePage}
         setActivePage={setActivePage}
         userEmail={userEmail}
+        accounts={accounts}
         onLogout={handleLogout}
         onAddTransaction={() => {
           setEditTransaction(null);
           setIsTransactionModalOpen(true);
         }}
+        onCreateAccount={() => setIsCreateAccountModalOpen(true)}
+        onDeleteAccount={handleDeleteAccount}
+        onTransfer={() => setIsTransferModalOpen(true)}
       />
 
       {/* ── PAGE CONTENT ─────────────────────────────────────────────────── */}
-      {/*
-        marginLeft: 240 offsets content past the fixed sidebar.
-        Without this, content renders UNDER the sidebar (overlapping).
-        flex:1 makes it fill remaining horizontal space.
-      */}
       <div
         style={{
           flex: 1,
@@ -259,10 +300,9 @@ export default function App() {
 
       {/* ── TRANSACTION MODAL ────────────────────────────────────────────── */}
       {/*
-        Single modal handles both Add and Edit.
-        editTransaction=null  → "Add Transaction" mode (empty form)
-        editTransaction={obj} → "Edit" mode (form pre-filled with obj data)
-        TransactionModal reads editTransaction prop to decide which mode.
+        accounts prop is passed so the modal can show the account selector.
+        When adding a transaction, user must pick which account it belongs to.
+        The backend will auto-update that account's balance.
       */}
       <TransactionModal
         isOpen={isTransactionModalOpen}
@@ -272,9 +312,10 @@ export default function App() {
         }}
         onSubmit={handleSubmitTransaction}
         editTransaction={editTransaction}
+        accounts={accounts}
       />
 
-      {/* ── TRANSFER MODAL ───────────────────────────────────────────────── */}
+      {/* ── ACCOUNT TRANSFER MODAL ───────────────────────────────────────── */}
       <AccountTransferModal
         isOpen={isTransferModalOpen}
         onClose={() => setIsTransferModalOpen(false)}
@@ -285,20 +326,15 @@ export default function App() {
         }}
       />
 
-      {/* ── TOAST ────────────────────────────────────────────────────────── */}
-      {/*
-        HOW TOAST WORKS:
-        1. Any page calls showToast("message", "success"|"error"|"info")
-        2. showToast() sets toast state → this conditional renders <Toast>
-        3. Toast slides in from bottom-right (CSS transition in Toast.js)
-        4. After 3.5s, setTimeout clears the state → Toast disappears
-        5. User can also click × inside Toast → onClose → setToast(null)
+      {/* ── CREATE ACCOUNT MODAL ─────────────────────────────────────────── */}
+      {isCreateAccountModalOpen && (
+        <CreateAccountModal
+          onClose={() => setIsCreateAccountModalOpen(false)}
+          onSubmit={handleCreateAccount}
+        />
+      )}
 
-        WHY IT WASN'T WORKING BEFORE:
-        The old App.js never imported Toast or defined showToast.
-        Pages had no way to trigger it. Now showToast is passed as a
-        prop to every page component via sharedProps.
-      */}
+      {/* ── TOAST ────────────────────────────────────────────────────────── */}
       {toast && (
         <Toast
           message={toast.message}
@@ -306,6 +342,170 @@ export default function App() {
           onClose={() => setToast(null)}
         />
       )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  CREATE ACCOUNT MODAL
+//  Inline component — small enough to keep here.
+//  User enters account name and opening balance.
+// ─────────────────────────────────────────────────────────────────────────────
+function CreateAccountModal({ onClose, onSubmit }) {
+  const [name, setName] = useState("");
+  const [balance, setBalance] = useState("");
+
+  const S = {
+    overlay: {
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,0.65)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 500,
+    },
+    box: {
+      background: "#0D1117",
+      border: "1px solid rgba(255,255,255,0.1)",
+      borderRadius: 16,
+      padding: "28px 32px",
+      width: "100%",
+      maxWidth: 380,
+      margin: "0 16px",
+    },
+    title: {
+      fontSize: 17,
+      fontWeight: 500,
+      color: "#F0F4FF",
+      margin: "0 0 20px",
+      letterSpacing: "-0.3px",
+    },
+    label: {
+      display: "block",
+      fontSize: 11,
+      fontWeight: 500,
+      color: "rgba(255,255,255,0.35)",
+      textTransform: "uppercase",
+      letterSpacing: "0.07em",
+      marginBottom: 7,
+    },
+    input: {
+      width: "100%",
+      background: "rgba(255,255,255,0.05)",
+      border: "1px solid rgba(255,255,255,0.1)",
+      borderRadius: 9,
+      padding: "10px 13px",
+      color: "#F0F4FF",
+      fontSize: 14,
+      outline: "none",
+      boxSizing: "border-box",
+      marginBottom: 14,
+    },
+    footer: { display: "flex", gap: 10, marginTop: 8 },
+    cancel: {
+      flex: 1,
+      padding: "10px",
+      background: "rgba(255,255,255,0.05)",
+      border: "1px solid rgba(255,255,255,0.1)",
+      color: "rgba(255,255,255,0.55)",
+      borderRadius: 9,
+      fontSize: 13,
+      cursor: "pointer",
+    },
+    submit: {
+      flex: 1,
+      padding: "10px",
+      background: "linear-gradient(135deg, #1E6FD9, #0D4FA8)",
+      border: "none",
+      color: "#fff",
+      borderRadius: 9,
+      fontSize: 13,
+      fontWeight: 500,
+      cursor: "pointer",
+    },
+  };
+
+  // Preset account names for quick selection
+  const PRESETS = ["UPI", "Cash", "Bank", "Savings", "Credit Card", "Wallet"];
+
+  return (
+    <div style={S.overlay} onClick={onClose}>
+      <div style={S.box} onClick={(e) => e.stopPropagation()}>
+        <h2 style={S.title}>Create Account</h2>
+
+        {/* Quick preset buttons */}
+        <label style={S.label}>Quick select</label>
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 6,
+            marginBottom: 14,
+          }}
+        >
+          {PRESETS.map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setName(p)}
+              style={{
+                padding: "4px 12px",
+                borderRadius: 20,
+                fontSize: 12,
+                background:
+                  name === p
+                    ? "rgba(99,179,255,0.15)"
+                    : "rgba(255,255,255,0.05)",
+                border:
+                  name === p
+                    ? "1px solid rgba(99,179,255,0.3)"
+                    : "1px solid rgba(255,255,255,0.1)",
+                color: name === p ? "#63B3FF" : "rgba(255,255,255,0.4)",
+                cursor: "pointer",
+                transition: "all 0.15s",
+              }}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+
+        <label style={S.label}>Account Name</label>
+        <input
+          style={S.input}
+          placeholder="e.g. UPI, Cash, HDFC Savings"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+        />
+
+        <label style={S.label}>Opening Balance (₹)</label>
+        <input
+          style={S.input}
+          type="number"
+          placeholder="0.00"
+          value={balance}
+          onChange={(e) => setBalance(e.target.value)}
+          min="0"
+          step="0.01"
+        />
+
+        <div style={S.footer}>
+          <button style={S.cancel} onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            style={S.submit}
+            onClick={() => {
+              if (!name.trim()) return;
+              onSubmit({ name: name.trim(), balance });
+            }}
+          >
+            Create Account
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
