@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { login, register } from "../services/authService";
-
+import { FaEye, FaEyeSlash } from "react-icons/fa";
 // ── Feature highlights shown on the left panel ─────────────────────────────
 const FEATURES = [
   {
@@ -28,6 +28,10 @@ const FEATURES = [
 // ── Reusable styled input field ────────────────────────────────────────────
 function Field({ label, type = "text", value, onChange, placeholder, hint }) {
   const [focused, setFocused] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const isPassword = type === "password";
+
   return (
     <div style={{ marginBottom: 18 }}>
       <div
@@ -56,30 +60,59 @@ function Field({ label, type = "text", value, onChange, placeholder, hint }) {
           </span>
         )}
       </div>
-      <input
-        type={type}
-        required
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        style={{
-          width: "100%",
-          background: focused
-            ? "rgba(99,179,255,0.06)"
-            : "rgba(255,255,255,0.04)",
-          border: `1px solid ${focused ? "rgba(99,179,255,0.4)" : "rgba(255,255,255,0.1)"}`,
-          borderRadius: 10,
-          padding: "12px 14px",
-          color: "#F0F4FF",
-          fontSize: 14,
-          outline: "none",
-          boxSizing: "border-box",
-          transition: "border-color 0.2s, background 0.2s",
-          caretColor: "#63B3FF",
-        }}
-      />
+
+      <div style={{ position: "relative" }}>
+        <input
+          type={isPassword ? (showPassword ? "text" : "password") : type}
+          required
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          style={{
+            width: "100%",
+            background: focused
+              ? "rgba(99,179,255,0.06)"
+              : "rgba(255,255,255,0.04)",
+            border: `1px solid ${
+              focused ? "rgba(99,179,255,0.4)" : "rgba(255,255,255,0.1)"
+            }`,
+            borderRadius: 10,
+            padding: isPassword ? "12px 42px 12px 14px" : "12px 14px",
+            color: "#F0F4FF",
+            fontSize: 14,
+            outline: "none",
+            boxSizing: "border-box",
+            transition: "border-color 0.2s, background 0.2s",
+            caretColor: "#63B3FF",
+          }}
+        />
+
+        {/* Premium eye icon */}
+        {isPassword && (
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            style={{
+              position: "absolute",
+              right: 12,
+              top: "50%",
+              transform: "translateY(-50%)",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              color: "rgba(255,255,255,0.4)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 0,
+            }}
+          >
+            {showPassword ? <FaEyeSlash size={16} /> : <FaEye size={16} />}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
