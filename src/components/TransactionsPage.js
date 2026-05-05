@@ -261,7 +261,8 @@ export default function TransactionsPage({ transactions, onEdit, onDelete }) {
       </div>
 
       {/* ── Table ── */}
-      <div style={S.tableWrap}>
+      // REPLACE WITH:
+        <div style={S.tableWrap} className="table-scroll-wrap">
         <table style={S.table}>
           <thead>
             <tr>

@@ -220,7 +220,8 @@ export default function BudgetPage({ dashboardData }) {
       )}
 
       {/* ── Category cards ── */}
-      <div style={S.grid}>
+      // REPLACE WITH:
+        <div className="budget-grid">
         {CATEGORIES.map(({ key, color, icon }) => {
           const spent = catSpending[key] || 0;
           const limit = budgets[key] || 0;

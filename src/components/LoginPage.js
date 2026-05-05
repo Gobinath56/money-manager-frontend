@@ -249,7 +249,7 @@ export default function LoginPage({ onSuccess }) {
       {/* ══════════════════════════════════════
           LEFT PANEL — branding + features
       ══════════════════════════════════════ */}
-      <div
+      <div className="login-left-panel"
         style={{
           width: 420,
           flexShrink: 0,
