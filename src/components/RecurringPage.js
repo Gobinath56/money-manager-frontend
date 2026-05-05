@@ -418,7 +418,7 @@ export default function RecurringPage({ showToast, onRefresh }) {
         </div>
       )}
 
-      // REPLACE WITH:
+      
         <div className="recurring-grid">
         {/* ════════════════════════════════════════
             LEFT — Add form
