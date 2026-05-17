@@ -56,4 +56,18 @@ export const recurringAPI = {
     runNow:    (id)     => api.post(`/recurring/${id}/run`),
     delete:    (id)     => api.delete(`/recurring/${id}`),
 };
+// Add this at the bottom of api.js — AFTER the api instance is created
+
+api.interceptors.response.use(
+  response => response,   // pass through successful responses
+  error => {
+    // If token expired or invalid → auto logout everywhere
+    if (error.response?.status === 401) {
+      localStorage.removeItem("token");
+      delete api.defaults.headers.common["Authorization"];
+      window.location.href = "/";   // force full reload back to login
+    }
+    return Promise.reject(error);
+  }
+);
 export default api;

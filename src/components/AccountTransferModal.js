@@ -5,9 +5,9 @@ import { accountAPI } from '../services/api';
 const AccountTransferModal = ({ isOpen, onClose, onSuccess }) => {
   const [accounts, setAccounts] = useState([]);
   const [formData, setFormData] = useState({
-    fromAccountId: '',
-    toAccountId: '',
-    amount: '',
+    fromAccountId: "",
+    toAccountId: "",
+    amount: "",
   });
   const [loading, setLoading] = useState(false);
 
@@ -22,27 +22,28 @@ const AccountTransferModal = ({ isOpen, onClose, onSuccess }) => {
       const response = await accountAPI.getAllAccounts();
       setAccounts(response.data);
     } catch (error) {
-      console.error('Error fetching accounts:', error);
+      console.error("Error fetching accounts:", error);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (formData.fromAccountId === formData.toAccountId) {
-      alert('Cannot transfer to the same account!');
+      alert("Cannot transfer to the same account!");
       return;
     }
 
     setLoading(true);
     try {
       await accountAPI.transfer(formData);
-      alert('Transfer successful!');
-      setFormData({ fromAccountId: '', toAccountId: '', amount: '' });
+      alert("Transfer successful!");
+      setFormData({ fromAccountId: "", toAccountId: "", amount: "" });
       onSuccess();
       onClose();
     } catch (error) {
-      const message = error.response?.data?.message || 'Transfer failed. Please try again.';
+      const message =
+        error.response?.data?.message || "Transfer failed. Please try again.";
       alert(message);
     } finally {
       setLoading(false);
@@ -50,7 +51,20 @@ const AccountTransferModal = ({ isOpen, onClose, onSuccess }) => {
   };
 
   if (!isOpen) return null;
-
+  // Show helpful message instead of broken form
+  if (accounts.length < 2) {
+    return (
+      <div style={{ textAlign: "center", padding: "32px 24px" }}>
+        <div style={{ fontSize: 32, marginBottom: 12 }}>⚠</div>
+        <p style={{ color: "#F0F4FF", fontWeight: 500, marginBottom: 8 }}>
+          You need at least 2 accounts to transfer
+        </p>
+        <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 13 }}>
+          Create another account first to enable transfers between them
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 modal-overlay animate-fade-in">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 animate-slide-down">
@@ -78,13 +92,15 @@ const AccountTransferModal = ({ isOpen, onClose, onSuccess }) => {
             <select
               required
               value={formData.fromAccountId}
-              onChange={(e) => setFormData({ ...formData, fromAccountId: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, fromAccountId: e.target.value })
+              }
               className="input-field"
             >
               <option value="">Select source account</option>
               {accounts.map((account) => (
                 <option key={account.id} value={account.id}>
-                  {account.name} (${account.balance?.toFixed(2) || '0.00'})
+                  {account.name} (${account.balance?.toFixed(2) || "0.00"})
                 </option>
               ))}
             </select>
@@ -98,13 +114,15 @@ const AccountTransferModal = ({ isOpen, onClose, onSuccess }) => {
             <select
               required
               value={formData.toAccountId}
-              onChange={(e) => setFormData({ ...formData, toAccountId: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, toAccountId: e.target.value })
+              }
               className="input-field"
             >
               <option value="">Select destination account</option>
               {accounts.map((account) => (
                 <option key={account.id} value={account.id}>
-                  {account.name} (${account.balance?.toFixed(2) || '0.00'})
+                  {account.name} (${account.balance?.toFixed(2) || "0.00"})
                 </option>
               ))}
             </select>
@@ -116,14 +134,18 @@ const AccountTransferModal = ({ isOpen, onClose, onSuccess }) => {
               Amount <span className="text-red-500">*</span>
             </label>
             <div className="relative">
-              <span className="absolute left-3 top-2.5 text-gray-500 font-semibold">$</span>
+              <span className="absolute left-3 top-2.5 text-gray-500 font-semibold">
+                $
+              </span>
               <input
                 type="number"
                 step="0.01"
                 required
                 min="0.01"
                 value={formData.amount}
-                onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, amount: e.target.value })
+                }
                 className="input-field pl-8"
                 placeholder="0.00"
               />
@@ -145,13 +167,13 @@ const AccountTransferModal = ({ isOpen, onClose, onSuccess }) => {
               className="flex-1 btn-primary"
               disabled={loading}
             >
-              {loading ? 'Processing...' : '💸 Transfer'}
+              {loading ? "Processing..." : "💸 Transfer"}
             </button>
           </div>
         </form>
       </div>
     </div>
   );
-};
+};;
 
 export default AccountTransferModal;
