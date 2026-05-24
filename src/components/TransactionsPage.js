@@ -261,8 +261,8 @@ export default function TransactionsPage({ transactions, onEdit, onDelete }) {
       </div>
 
       {/* ── Table ── */}
-      
-        <div style={S.tableWrap} className="table-scroll-wrap">
+
+      <div style={S.tableWrap} className="table-scroll-wrap">
         <table style={S.table}>
           <thead>
             <tr>
@@ -270,6 +270,7 @@ export default function TransactionsPage({ transactions, onEdit, onDelete }) {
                 "Date & Time",
                 "Description",
                 "Category",
+                "Sub",
                 "Division",
                 "Type",
                 "Amount",
@@ -318,6 +319,31 @@ export default function TransactionsPage({ transactions, onEdit, onDelete }) {
                     <span style={S.badge(CAT_COLORS[t.category] || "#6B7280")}>
                       {cap(t.category)}
                     </span>
+                  </td>
+                  <td style={S.td}>
+                    {t.subCategory ? (
+                      <span
+                        style={{
+                          fontSize: 11,
+                          padding: "2px 8px",
+                          borderRadius: 20,
+                          background: "rgba(255,255,255,0.06)",
+                          border: "1px solid rgba(255,255,255,0.1)",
+                          color: "rgba(255,255,255,0.5)",
+                        }}
+                      >
+                        {t.subCategory}
+                      </span>
+                    ) : (
+                      <span
+                        style={{
+                          color: "rgba(255,255,255,0.15)",
+                          fontSize: 11,
+                        }}
+                      >
+                        —
+                      </span>
+                    )}
                   </td>
                   <td style={S.td}>
                     <span style={S.badge(DIV_COLORS[t.division] || "#6B7280")}>

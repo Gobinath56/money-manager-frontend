@@ -56,6 +56,15 @@ export const recurringAPI = {
     runNow:    (id)     => api.post(`/recurring/${id}/run`),
     delete:    (id)     => api.delete(`/recurring/${id}`),
 };
+// Add to src/services/api.js
+export const categoryAPI = {
+  getAll:           ()              => api.get("/categories"),
+  getByType:        (type)          => api.get(`/categories/by-type?type=${type}`),
+  create:           (data)          => api.post("/categories", data),
+  addSubCategory:   (id, name)      => api.post(`/categories/${id}/subcategories`, { name }),
+  removeSubCategory:(id, subName)   => api.delete(`/categories/${id}/subcategories/${subName}`),
+  delete:           (id)            => api.delete(`/categories/${id}`),
+};
 // Add this at the bottom of api.js — AFTER the api instance is created
 
 api.interceptors.response.use(

@@ -13,6 +13,7 @@ import RecurringPage from "./components/RecurringPage";
 import TransactionModal from "./components/TransactionModal";
 import AccountTransferModal from "./components/AccountTransferModal";
 import Toast from "./components/Toast";
+import CategoriesPage from "./components/CategoriesPage";
 
 function getEmailFromToken(token) {
   try { return JSON.parse(atob(token.split(".")[1])).sub; }
@@ -225,6 +226,7 @@ export default function App() {
       case "analytics":    return <AnalyticsPage    {...sharedProps} />;
       case "budget":       return <BudgetPage       {...sharedProps} />;
       case "recurring":    return <RecurringPage showToast={showToast} onRefresh={() => { fetchDashboardData(); fetchAccounts(); }} />;
+      case "categories": return <CategoriesPage showToast={showToast} />;
       default:             return <DashboardPage    {...sharedProps} />;
     }
   };
