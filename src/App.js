@@ -20,16 +20,12 @@ function getEmailFromToken(token) {
   catch { return null; }
 }
 
-// ── useIsMobile hook ───────────────────────────────────────────────────────
-// Returns true when window width is <= 768px.
-// Re-evaluates on window resize so layout switches dynamically.
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth <= 768);
     window.addEventListener("resize", handler);
     return () => window.removeEventListener("resize", handler);
-    // cleanup: remove listener when component unmounts to prevent memory leak
   }, []);
   return isMobile;
 }
@@ -45,16 +41,10 @@ export default function App() {
   // ── Navigation ─────────────────────────────────────────────────────────────
   const [activePage, setActivePage]   = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  // sidebarOpen: on desktop this doesn't matter (sidebar always visible via CSS)
-  //              on mobile this controls the drawer slide-in
 
   // ── Responsive detection ───────────────────────────────────────────────────
   const isMobile = useIsMobile();
-
-  // Close sidebar drawer when switching to desktop
-  useEffect(() => {
-    if (!isMobile) setSidebarOpen(false);
-  }, [isMobile]);
+  useEffect(() => { if (!isMobile) setSidebarOpen(false); }, [isMobile]);
 
   // ── Data ───────────────────────────────────────────────────────────────────
   const [dashboardData, setDashboardData] = useState(null);
@@ -195,11 +185,10 @@ export default function App() {
     }
   };
 
-  // ── Open add transaction modal (also used by BottomNav FAB) ───────────────
   const openAddTransaction = () => {
     setEditTransaction(null);
     setIsTransactionModalOpen(true);
-    setSidebarOpen(false); // close drawer if open on mobile
+    setSidebarOpen(false);
   };
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -222,11 +211,12 @@ export default function App() {
   const renderPage = () => {
     switch (activePage) {
       case "dashboard":    return <DashboardPage    {...sharedProps} />;
+      // ── Pass accounts so the Account column resolves names ──
       case "transactions": return <TransactionsPage {...sharedProps} />;
       case "analytics":    return <AnalyticsPage    {...sharedProps} />;
       case "budget":       return <BudgetPage       {...sharedProps} />;
       case "recurring":    return <RecurringPage showToast={showToast} onRefresh={() => { fetchDashboardData(); fetchAccounts(); }} />;
-      case "categories": return <CategoriesPage showToast={showToast} />;
+      case "categories":   return <CategoriesPage showToast={showToast} />;
       default:             return <DashboardPage    {...sharedProps} />;
     }
   };
@@ -234,12 +224,6 @@ export default function App() {
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "#080C14", fontFamily: "'DM Sans', 'Inter', 'Segoe UI', sans-serif" }}>
 
-      {/* ── SIDEBAR ──────────────────────────────────────────────────────── */}
-      {/*
-        Desktop: always visible, fixed left, 240px wide.
-        Mobile:  hidden (translateX -100%), slides in when sidebarOpen=true.
-        The Sidebar component handles both states via CSS classes.
-      */}
       <Sidebar
         activePage={activePage}
         setActivePage={setActivePage}
@@ -254,40 +238,22 @@ export default function App() {
         onClose={() => setSidebarOpen(false)}
       />
 
-      {/* ── MOBILE TOP HEADER ────────────────────────────────────────────── */}
-      {/*
-        Only visible on mobile (< 769px) via CSS.
-        Shows: hamburger (opens sidebar drawer), page title, quick add button.
-      */}
       <MobileHeader
         activePage={activePage}
         onOpenSidebar={() => setSidebarOpen(true)}
         onAddTransaction={openAddTransaction}
       />
 
-      {/* ── PAGE CONTENT ─────────────────────────────────────────────────── */}
-      {/*
-        Desktop: marginLeft 240px to offset fixed sidebar.
-        Mobile:  marginLeft 0 (sidebar is hidden), paddingTop 56px (for header),
-                 paddingBottom 70px (for bottom nav bar).
-        These responsive margins are set via CSS classes below.
-      */}
       <div className="page-content">
         {renderPage()}
       </div>
 
-      {/* ── MOBILE BOTTOM NAV ────────────────────────────────────────────── */}
-      {/*
-        Only visible on mobile (< 769px) via CSS inside BottomNav.
-        Shows 5 nav items + a FAB (floating action button) in the centre.
-      */}
       <BottomNav
         activePage={activePage}
         setActivePage={setActivePage}
         onAddTransaction={openAddTransaction}
       />
 
-      {/* ── MODALS ───────────────────────────────────────────────────────── */}
       <TransactionModal
         isOpen={isTransactionModalOpen}
         onClose={() => { setIsTransactionModalOpen(false); setEditTransaction(null); }}
@@ -309,41 +275,18 @@ export default function App() {
         />
       )}
 
-      {/* ── TOAST ────────────────────────────────────────────────────────── */}
       {toast && (
         <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
       )}
 
-      {/* ── Global responsive CSS ────────────────────────────────────────── */}
       <style>{`
-        /* Desktop layout */
         @media (min-width: 769px) {
-          .page-content {
-            flex: 1;
-            margin-left: 240px;
-            min-height: 100vh;
-            overflow-x: hidden;
-          }
+          .page-content { flex: 1; margin-left: 240px; min-height: 100vh; overflow-x: hidden; }
         }
-
-        /* Mobile layout */
         @media (max-width: 768px) {
-          .page-content {
-            flex: 1;
-            margin-left: 0;
-            min-height: 100vh;
-            overflow-x: hidden;
-            /* Push content below fixed header */
-            padding-top: 56px;
-            /* Push content above fixed bottom nav */
-            padding-bottom: 70px;
-          }
+          .page-content { flex: 1; margin-left: 0; min-height: 100vh; overflow-x: hidden; padding-top: 56px; padding-bottom: 70px; }
         }
-
-        /* Prevent body scroll when mobile sidebar is open */
-        body.sidebar-open {
-          overflow: hidden;
-        }
+        body.sidebar-open { overflow: hidden; }
       `}</style>
     </div>
   );
@@ -358,13 +301,13 @@ function CreateAccountModal({ onClose, onSubmit }) {
 
   const S = {
     overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 500, padding: "0 16px" },
-    box: { background: "#0D1117", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 16, padding: "28px 24px", width: "100%", maxWidth: 380 },
-    title: { fontSize: 17, fontWeight: 500, color: "#F0F4FF", margin: "0 0 20px", letterSpacing: "-0.3px" },
-    label: { display: "block", fontSize: 11, fontWeight: 500, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 7 },
-    input: { width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 9, padding: "11px 13px", color: "#F0F4FF", fontSize: 14, outline: "none", boxSizing: "border-box", marginBottom: 14 },
-    footer: { display: "flex", gap: 10, marginTop: 8 },
-    cancel: { flex: 1, padding: "11px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.55)", borderRadius: 9, fontSize: 13, cursor: "pointer" },
-    submit: { flex: 1, padding: "11px", background: "linear-gradient(135deg, #1E6FD9, #0D4FA8)", border: "none", color: "#fff", borderRadius: 9, fontSize: 13, fontWeight: 500, cursor: "pointer" },
+    box:     { background: "#0D1117", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 16, padding: "28px 24px", width: "100%", maxWidth: 380 },
+    title:   { fontSize: 17, fontWeight: 500, color: "#F0F4FF", margin: "0 0 20px", letterSpacing: "-0.3px" },
+    label:   { display: "block", fontSize: 11, fontWeight: 500, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 7 },
+    input:   { width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 9, padding: "11px 13px", color: "#F0F4FF", fontSize: 14, outline: "none", boxSizing: "border-box", marginBottom: 14 },
+    footer:  { display: "flex", gap: 10, marginTop: 8 },
+    cancel:  { flex: 1, padding: "11px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.55)", borderRadius: 9, fontSize: 13, cursor: "pointer" },
+    submit:  { flex: 1, padding: "11px", background: "linear-gradient(135deg, #1E6FD9, #0D4FA8)", border: "none", color: "#fff", borderRadius: 9, fontSize: 13, fontWeight: 500, cursor: "pointer" },
   };
 
   return (
