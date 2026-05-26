@@ -1,325 +1,202 @@
 import React, { useState, useEffect } from "react";
 import { categoryAPI } from "../services/api";
 
-// ── Suggested categories shown to every user ───────────────────────────────
-// These are displayed as quick-pick chips before the user has created anything.
-// Clicking one adds it to their account with default subcategories.
+// ─────────────────────────────────────────────────────────────────────────────
+//  CategoriesPage
+//
+//  Layout (top → bottom):
+//    1. INCOME / EXPENSE type toggle
+//    2. Quick-add chips  — click to add a suggested category with default subs
+//    3. Create custom    — one-line form (name + optional subs)
+//    4. Your categories  — cards showing subs, with inline add/remove per card
+// ─────────────────────────────────────────────────────────────────────────────
+
 const SUGGESTIONS = {
   EXPENSE: [
-    {
-      name: "FOOD",
-      icon: "🍔",
-      subs: [
-        "Breakfast",
-        "Lunch",
-        "Dinner",
-        "Snacks",
-        "Groceries",
-        "Restaurant",
-      ],
-    },
-    {
-      name: "FUEL",
-      icon: "⛽",
-      subs: ["Petrol", "Diesel", "EV Charge", "CNG"],
-    },
-    {
-      name: "TRIP",
-      icon: "✈️",
-      subs: ["Travel", "Hotel", "Food", "Activities", "Shopping", "Transport"],
-    },
-    {
-      name: "MEDICAL",
-      icon: "🏥",
-      subs: ["Medicine", "Doctor", "Lab Test", "Hospital", "Insurance"],
-    },
-    {
-      name: "MOVIE",
-      icon: "🎬",
-      subs: ["Cinema", "OTT", "Events", "Concerts"],
-    },
-    { name: "LOAN", icon: "💳", subs: ["EMI", "Interest", "Credit Card"] },
-    {
-      name: "SHOPPING",
-      icon: "🛍️",
-      subs: ["Clothes", "Electronics", "Home", "Gifts"],
-    },
-    {
-      name: "EDUCATION",
-      icon: "📚",
-      subs: ["Fees", "Books", "Online Course", "Stationery"],
-    },
-    {
-      name: "UTILITIES",
-      icon: "💡",
-      subs: ["Electricity", "Water", "Internet", "Mobile"],
-    },
-    {
-      name: "RENT",
-      icon: "🏠",
-      subs: ["House Rent", "Maintenance", "Parking"],
-    },
-    {
-      name: "FITNESS",
-      icon: "💪",
-      subs: ["Gym", "Supplements", "Equipment", "Sports"],
-    },
-    { name: "OTHER", icon: "📦", subs: [] },
+    { name: "FOOD",      icon: "🍔", subs: ["Breakfast","Lunch","Dinner","Snacks","Groceries","Restaurant"] },
+    { name: "FUEL",      icon: "⛽", subs: ["Petrol","Diesel","EV Charge","CNG"] },
+    { name: "TRIP",      icon: "✈️", subs: ["Travel","Hotel","Food","Activities","Shopping","Transport"] },
+    { name: "MEDICAL",   icon: "🏥", subs: ["Medicine","Doctor","Lab Test","Hospital","Insurance"] },
+    { name: "MOVIE",     icon: "🎬", subs: ["Cinema","OTT Subscription","Events","Concerts"] },
+    { name: "LOAN",      icon: "💳", subs: ["EMI","Interest","Credit Card"] },
+    { name: "SHOPPING",  icon: "🛍️", subs: ["Clothes","Electronics","Home","Gifts"] },
+    { name: "UTILITIES", icon: "💡", subs: ["Electricity","Water","Internet","Mobile"] },
+    { name: "RENT",      icon: "🏠", subs: ["House Rent","Maintenance","Parking"] },
+    { name: "FITNESS",   icon: "💪", subs: ["Gym","Supplements","Equipment","Sports"] },
+    { name: "EDUCATION", icon: "📚", subs: ["Fees","Books","Online Course","Stationery"] },
+    { name: "OTHER",     icon: "📦", subs: [] },
   ],
   INCOME: [
-    {
-      name: "SALARY",
-      icon: "💰",
-      subs: ["Basic Pay", "Bonus", "Allowance", "Overtime"],
-    },
-    {
-      name: "FREELANCE",
-      icon: "💼",
-      subs: ["Project", "Consultation", "Contract"],
-    },
-    {
-      name: "INVESTMENT",
-      icon: "📈",
-      subs: ["Dividend", "Interest", "Capital Gains", "Returns"],
-    },
-    {
-      name: "BUSINESS",
-      icon: "🏢",
-      subs: ["Sales", "Commission", "Partnership"],
-    },
-    { name: "RENTAL", icon: "🏘️", subs: ["House Rent", "Shop Rent", "Land"] },
-    { name: "OTHER", icon: "➕", subs: [] },
+    { name: "SALARY",     icon: "💰", subs: ["Basic Pay","Bonus","Allowance","Overtime"] },
+    { name: "FREELANCE",  icon: "💼", subs: ["Project","Consultation","Contract"] },
+    { name: "INVESTMENT", icon: "📈", subs: ["Dividend","Interest","Capital Gains","Returns"] },
+    { name: "BUSINESS",   icon: "🏢", subs: ["Sales","Commission","Partnership"] },
+    { name: "RENTAL",     icon: "🏘️", subs: ["House Rent","Shop Rent","Land"] },
+    { name: "OTHER",      icon: "➕", subs: [] },
   ],
 };
 
-// ── Colour for each type tab ───────────────────────────────────────────────
-const TYPE_COLOR = { INCOME: "#10B981", EXPENSE: "#EF4444" };
+const ICON_MAP = Object.fromEntries(
+  [...SUGGESTIONS.EXPENSE, ...SUGGESTIONS.INCOME].map(s => [s.name, s.icon])
+);
 
-// ── Styles ─────────────────────────────────────────────────────────────────
-const S = {
-  page: {
-    padding: "20px 16px",
-    color: "#E8EDF5",
-    minHeight: "100vh",
-    fontFamily: "'DM Sans', sans-serif",
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: 600,
-    color: "#F0F4FF",
-    margin: "0 0 4px",
-    letterSpacing: "-0.4px",
-  },
-  sub: { fontSize: 12, color: "rgba(255,255,255,0.35)", marginBottom: 24 },
-
-  // Tab row — INCOME / EXPENSE switcher
-  tabs: {
-    display: "flex",
-    background: "rgba(255,255,255,0.04)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: 12,
-    padding: 4,
-    marginBottom: 20,
-    maxWidth: 320,
-  },
-  tab: (active, color) => ({
-    flex: 1,
-    padding: "9px 0",
-    border: "none",
-    borderRadius: 9,
-    fontSize: 13,
-    fontWeight: active ? 500 : 400,
-    cursor: "pointer",
-    background: active ? color + "22" : "transparent",
-    color: active ? color : "rgba(255,255,255,0.35)",
-    transition: "all 0.15s",
-  }),
-
-  // Section card
+// ── Shared style tokens ───────────────────────────────────────────────────
+const T = {
   card: {
     background: "#0D1117",
     border: "1px solid rgba(255,255,255,0.07)",
-    borderRadius: 16,
-    padding: "20px 22px",
-    marginBottom: 16,
-  },
-  cardTitle: {
-    fontSize: 11,
-    fontWeight: 500,
-    color: "rgba(255,255,255,0.3)",
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    marginBottom: 14,
-  },
-
-  // Suggestion chips
-  chipGrid: { display: "flex", flexWrap: "wrap", gap: 8 },
-  chip: (added) => ({
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-    padding: "6px 14px",
-    borderRadius: 20,
-    cursor: "pointer",
-    fontSize: 13,
-    fontWeight: 500,
-    transition: "all 0.15s",
-    background: added ? "rgba(16,185,129,0.15)" : "rgba(255,255,255,0.06)",
-    border: added
-      ? "1px solid rgba(16,185,129,0.3)"
-      : "1px solid rgba(255,255,255,0.1)",
-    color: added ? "#10B981" : "rgba(255,255,255,0.6)",
-  }),
-  chipIcon: { fontSize: 14 },
-
-  // User's category cards grid
-  catGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
-    gap: 12,
-  },
-  catCard: (color) => ({
-    background: "#0D1117",
-    border: `1px solid ${color}22`,
-    borderLeft: `3px solid ${color}`,
     borderRadius: 14,
     padding: "16px 18px",
-  }),
-  catHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 12,
-  },
-  catName: { fontSize: 15, fontWeight: 500, color: "#F0F4FF" },
-  catBadge: (isCustom) => ({
-    fontSize: 10,
-    padding: "2px 8px",
-    borderRadius: 10,
-    background: isCustom ? "rgba(99,179,255,0.15)" : "rgba(255,255,255,0.06)",
-    color: isCustom ? "#63B3FF" : "rgba(255,255,255,0.3)",
-    border: isCustom
-      ? "1px solid rgba(99,179,255,0.25)"
-      : "1px solid rgba(255,255,255,0.08)",
-  }),
-
-  // Subcategory pills inside a category card
-  subWrap: { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 },
-  subPill: {
-    display: "flex",
-    alignItems: "center",
-    gap: 5,
-    padding: "3px 10px",
-    borderRadius: 20,
-    background: "rgba(255,255,255,0.06)",
-    border: "1px solid rgba(255,255,255,0.1)",
-    fontSize: 12,
-    color: "rgba(255,255,255,0.6)",
-  },
-  subDel: {
-    background: "none",
-    border: "none",
-    color: "rgba(239,68,68,0.5)",
-    cursor: "pointer",
-    fontSize: 13,
-    padding: 0,
-    lineHeight: 1,
-  },
-
-  // Add subcategory inline input
-  addSubRow: { display: "flex", gap: 6, marginTop: 4 },
-  addSubInput: {
-    flex: 1,
-    background: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.1)",
-    borderRadius: 8,
-    padding: "6px 10px",
-    color: "#E8EDF5",
-    fontSize: 12,
-    outline: "none",
-  },
-  addSubBtn: (color) => ({
-    background: color + "22",
-    border: `1px solid ${color}44`,
-    color,
-    borderRadius: 8,
-    padding: "6px 12px",
-    fontSize: 12,
-    cursor: "pointer",
-    fontWeight: 500,
-    whiteSpace: "nowrap",
-  }),
-  deleteBtn: {
-    background: "rgba(239,68,68,0.1)",
-    border: "1px solid rgba(239,68,68,0.2)",
-    color: "#EF4444",
-    borderRadius: 8,
-    padding: "5px 10px",
-    fontSize: 11,
-    cursor: "pointer",
-    marginTop: 8,
-  },
-
-  // Create new category form
-  input: {
-    width: "100%",
-    background: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.1)",
-    borderRadius: 9,
-    padding: "10px 13px",
-    color: "#F0F4FF",
-    fontSize: 13,
-    outline: "none",
-    boxSizing: "border-box",
-    marginBottom: 10,
   },
   label: {
-    display: "block",
-    fontSize: 10,
-    fontWeight: 500,
+    fontSize: 10, fontWeight: 500,
     color: "rgba(255,255,255,0.3)",
-    textTransform: "uppercase",
-    letterSpacing: "0.07em",
-    marginBottom: 6,
+    textTransform: "uppercase", letterSpacing: "0.08em",
+    marginBottom: 12, display: "block",
   },
-  createBtn: (color) => ({
-    padding: "10px 20px",
-    background: `linear-gradient(135deg, ${color}, ${color}CC)`,
-    border: "none",
-    borderRadius: 9,
-    color: "#fff",
-    fontSize: 13,
-    fontWeight: 500,
-    cursor: "pointer",
-  }),
-  spinner: {
-    width: 20,
-    height: 20,
-    border: "2px solid rgba(99,179,255,0.2)",
-    borderTopColor: "#63B3FF",
-    borderRadius: "50%",
-    margin: "20px auto",
-    animation: "spin 0.8s linear infinite",
+  input: {
+    background: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: 8, padding: "9px 12px",
+    color: "#E8EDF5", fontSize: 13, outline: "none",
+    fontFamily: "inherit",
+  },
+  pill: {
+    display: "inline-flex", alignItems: "center", gap: 5,
+    padding: "3px 10px", borderRadius: 20,
+    background: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(255,255,255,0.1)",
+    fontSize: 12, color: "rgba(255,255,255,0.55)",
   },
 };
 
+// ── Sub-pill with remove button ───────────────────────────────────────────
+function SubPill({ name, onRemove }) {
+  return (
+    <span style={T.pill}>
+      <span>{name}</span>
+      {onRemove && (
+        <button
+          onClick={onRemove}
+          style={{
+            background: "none", border: "none",
+            color: "rgba(239,68,68,0.5)", cursor: "pointer",
+            fontSize: 14, lineHeight: 1, padding: "0 1px",
+            fontFamily: "inherit", transition: "color 0.15s",
+          }}
+          onMouseEnter={e => e.currentTarget.style.color = "#EF4444"}
+          onMouseLeave={e => e.currentTarget.style.color = "rgba(239,68,68,0.5)"}
+        >
+          ×
+        </button>
+      )}
+    </span>
+  );
+}
+
+// ── Category card ─────────────────────────────────────────────────────────
+function CategoryCard({ cat, accentColor, onAddSub, onRemoveSub, onDelete }) {
+  const [subInput, setSubInput] = useState("");
+  const icon = ICON_MAP[cat.name] || "📁";
+  const display = cat.name.charAt(0) + cat.name.slice(1).toLowerCase();
+
+  function handleAddSub() {
+    const val = subInput.trim();
+    if (!val) return;
+    onAddSub(cat.id, val);
+    setSubInput("");
+  }
+
+  return (
+    <div style={{
+      ...T.card,
+      borderLeft: `3px solid ${accentColor}`,
+    }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <span style={{ fontSize: 16 }}>{icon}</span>
+        <span style={{ fontSize: 14, fontWeight: 500, color: "#F0F4FF", flex: 1 }}>{display}</span>
+        <span style={{
+          fontSize: 10, padding: "2px 8px", borderRadius: 20,
+          background: cat.custom ? "rgba(99,179,255,0.12)" : "rgba(255,255,255,0.06)",
+          color: cat.custom ? "#63B3FF" : "rgba(255,255,255,0.3)",
+          border: cat.custom ? "1px solid rgba(99,179,255,0.2)" : "1px solid rgba(255,255,255,0.08)",
+        }}>
+          {cat.custom ? "Custom" : "Default"}
+        </span>
+        {cat.custom && (
+          <button
+            onClick={() => onDelete(cat)}
+            style={{
+              background: "rgba(239,68,68,0.1)",
+              border: "1px solid rgba(239,68,68,0.2)",
+              color: "#EF4444", borderRadius: 6,
+              padding: "3px 8px", fontSize: 11,
+              cursor: "pointer", fontFamily: "inherit",
+            }}
+          >
+            Remove
+          </button>
+        )}
+      </div>
+
+      {/* Subcategory pills */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10, minHeight: 26 }}>
+        {cat.subCategories && cat.subCategories.length > 0
+          ? cat.subCategories.map(sub => (
+              <SubPill
+                key={sub} name={sub}
+                onRemove={() => onRemoveSub(cat.id, sub)}
+              />
+            ))
+          : <span style={{ fontSize: 12, color: "rgba(255,255,255,0.2)" }}>No subcategories yet</span>
+        }
+      </div>
+
+      {/* Add subcategory inline */}
+      <div style={{ display: "flex", gap: 6 }}>
+        <input
+          style={{ ...T.input, flex: 1, fontSize: 12, padding: "6px 10px" }}
+          placeholder="Add subcategory…"
+          value={subInput}
+          onChange={e => setSubInput(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && handleAddSub()}
+        />
+        <button
+          onClick={handleAddSub}
+          style={{
+            padding: "6px 12px", borderRadius: 8, cursor: "pointer",
+            background: `${accentColor}18`,
+            border: `1px solid ${accentColor}44`,
+            color: accentColor, fontSize: 12, fontWeight: 500,
+            fontFamily: "inherit", whiteSpace: "nowrap",
+          }}
+        >
+          + Add
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Accent colours cycling for category cards ────────────────────────────
+const CARD_ACCENTS = [
+  "#3B82F6","#10B981","#F59E0B","#EF4444","#8B5CF6",
+  "#EC4899","#14B8A6","#F97316","#6366F1","#84CC16",
+];
+
+// ── Main component ────────────────────────────────────────────────────────
 export default function CategoriesPage({ showToast }) {
   const [activeType, setActiveType] = useState("EXPENSE");
   const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading,    setLoading]    = useState(true);
 
-  // Create form state
-  const [newCatName, setNewCatName] = useState("");
-  const [newCatSubs, setNewCatSubs] = useState(""); // comma-separated
+  // Create form
+  const [newName, setNewName] = useState("");
+  const [newSubs, setNewSubs] = useState("");
   const [creating, setCreating] = useState(false);
 
-  // Per-card "add subcategory" input state: { [categoryId]: inputValue }
-  const [subInputs, setSubInputs] = useState({});
-
-  // ── Fetch categories on mount ─────────────────────────────────────────────
-  useEffect(() => {
-    fetchCategories();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchCategories(); }, []); // eslint-disable-line
 
   const fetchCategories = async () => {
     setLoading(true);
@@ -333,325 +210,261 @@ export default function CategoriesPage({ showToast }) {
     }
   };
 
-  // ── Filter by active type tab ──────────────────────────────────────────────
-  const filtered = categories.filter((c) => c.type === activeType);
+  const filtered     = categories.filter(c => c.type === activeType);
+  const existingNames = new Set(filtered.map(c => c.name));
+  const suggestions  = SUGGESTIONS[activeType];
 
-  // Names of categories the user already has (to mark suggestion chips)
-  const existingNames = new Set(filtered.map((c) => c.name));
-
-  // ── Add a suggestion chip ─────────────────────────────────────────────────
-  // When user clicks a suggestion, create it with its default subcategories
-  const handleAddSuggestion = async (suggestion) => {
-    if (existingNames.has(suggestion.name)) return; // already added
+  // ── Quick-add a suggestion ─────────────────────────────────────────────
+  const handleAddSuggestion = async (s) => {
+    if (existingNames.has(s.name)) return;
     try {
-      await categoryAPI.create({
-        name: suggestion.name,
-        type: activeType,
-        subCategories: suggestion.subs,
-      });
-      showToast(`${suggestion.name} added`);
+      await categoryAPI.create({ name: s.name, type: activeType, subCategories: s.subs });
+      showToast(`${s.name.charAt(0) + s.name.slice(1).toLowerCase()} added`);
       fetchCategories();
     } catch (err) {
-      showToast(
-        err.response?.data?.message || "Failed to add category",
-        "error",
-      );
+      showToast(err.response?.data?.message || "Failed to add category", "error");
     }
   };
 
-  // ── Create a brand new custom category ───────────────────────────────────
+  // ── Create custom ──────────────────────────────────────────────────────
   const handleCreate = async () => {
-    if (!newCatName.trim()) {
-      showToast("Enter a category name", "error");
-      return;
-    }
+    const name = newName.trim().toUpperCase();
+    if (!name) { showToast("Enter a category name", "error"); return; }
     setCreating(true);
     try {
-      // Parse comma-separated subcategories: "Travel, Hotel, Food" → ["Travel", "Hotel", "Food"]
-      const subs = newCatSubs
-        .split(",")
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0);
-
-      await categoryAPI.create({
-        name: newCatName.trim().toUpperCase(),
-        type: activeType,
-        subCategories: subs,
-      });
-      showToast(`Category "${newCatName.toUpperCase()}" created`);
-      setNewCatName("");
-      setNewCatSubs("");
+      const subs = newSubs.split(",").map(s => s.trim()).filter(Boolean);
+      await categoryAPI.create({ name, type: activeType, subCategories: subs });
+      showToast(`${name} created`);
+      setNewName(""); setNewSubs("");
       fetchCategories();
     } catch (err) {
-      showToast(
-        err.response?.data?.message || "Failed to create category",
-        "error",
-      );
+      showToast(err.response?.data?.message || "Failed to create category", "error");
     } finally {
       setCreating(false);
     }
   };
 
-  // ── Add a subcategory to an existing category ─────────────────────────────
-  const handleAddSub = async (catId, subName) => {
-    if (!subName?.trim()) return;
+  // ── Add subcategory ────────────────────────────────────────────────────
+  const handleAddSub = async (catId, sub) => {
     try {
-      await categoryAPI.addSubCategory(catId, subName.trim());
-      // Clear that card's input
-      setSubInputs((prev) => ({ ...prev, [catId]: "" }));
+      await categoryAPI.addSubCategory(catId, sub);
       fetchCategories();
-    } catch {
-      showToast("Failed to add subcategory", "error");
-    }
+    } catch { showToast("Failed to add subcategory", "error"); }
   };
 
-  // ── Remove a subcategory ──────────────────────────────────────────────────
-  const handleRemoveSub = async (catId, subName) => {
+  // ── Remove subcategory ─────────────────────────────────────────────────
+  const handleRemoveSub = async (catId, sub) => {
     try {
-      await categoryAPI.removeSubCategory(catId, subName);
+      await categoryAPI.removeSubCategory(catId, sub);
       fetchCategories();
-    } catch {
-      showToast("Failed to remove subcategory", "error");
-    }
+    } catch { showToast("Failed to remove subcategory", "error"); }
   };
 
-  // ── Delete a custom category ──────────────────────────────────────────────
-  const handleDeleteCategory = async (cat) => {
-    if (!cat.custom) {
-      showToast("Default categories cannot be deleted", "error");
-      return;
-    }
+  // ── Delete custom category ─────────────────────────────────────────────
+  const handleDelete = async (cat) => {
+    if (!cat.custom) { showToast("Default categories cannot be deleted", "error"); return; }
     try {
       await categoryAPI.delete(cat.id);
-      showToast(`"${cat.name}" deleted`);
+      showToast(`"${cat.name}" removed`);
       fetchCategories();
-    } catch {
-      showToast("Failed to delete category", "error");
-    }
+    } catch { showToast("Failed to delete category", "error"); }
   };
 
-  const color = TYPE_COLOR[activeType];
-  const suggestions = SUGGESTIONS[activeType];
+  const expenseColor = "#EF4444";
+  const incomeColor  = "#10B981";
+  const activeColor  = activeType === "EXPENSE" ? expenseColor : incomeColor;
 
   return (
-    <div style={S.page}>
-      <h1 style={S.title}>Categories</h1>
-      <p style={S.sub}>
-        Customise your income and expense categories and subcategories
-      </p>
+    <div className="cat-page-wrap">
 
-      {/* ── Type tab switcher ── */}
-      <div style={S.tabs}>
-        {["EXPENSE", "INCOME"].map((t) => (
+      {/* ── Header ── */}
+      <div style={{ marginBottom: 24 }}>
+        <h1 style={{ fontSize: 24, fontWeight: 600, color: "#F0F4FF", margin: "0 0 4px", letterSpacing: "-0.4px" }}>
+          Categories
+        </h1>
+        <p style={{ fontSize: 13, color: "rgba(255,255,255,0.35)", margin: 0 }}>
+          Organise your transactions with custom income and expense categories.
+        </p>
+      </div>
+
+      {/* ── Type toggle ── */}
+      <div style={{
+        display: "flex",
+        background: "rgba(255,255,255,0.04)",
+        border: "1px solid rgba(255,255,255,0.08)",
+        borderRadius: 12, padding: 4, marginBottom: 28, maxWidth: 340,
+      }}>
+        {[
+          { key: "EXPENSE", label: "💸 Expense", color: expenseColor },
+          { key: "INCOME",  label: "💰 Income",  color: incomeColor  },
+        ].map(t => (
           <button
-            key={t}
-            style={S.tab(activeType === t, TYPE_COLOR[t])}
-            onClick={() => setActiveType(t)}
+            key={t.key}
+            onClick={() => setActiveType(t.key)}
+            style={{
+              flex: 1, padding: "9px 0", border: "none", borderRadius: 9,
+              fontSize: 13, fontWeight: activeType === t.key ? 500 : 400,
+              cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s",
+              background: activeType === t.key ? `${t.color}22` : "transparent",
+              color: activeType === t.key ? t.color : "rgba(255,255,255,0.35)",
+            }}
           >
-            {t === "EXPENSE" ? "💸 Expense" : "💰 Income"}
+            {t.label}
           </button>
         ))}
       </div>
 
-      {/* ════════════════════════════════════════
-          SUGGESTIONS — quick pick chips
-          Marked as ✓ if already in user's list
-      ════════════════════════════════════════ */}
-      <div style={S.card}>
-        <div style={S.cardTitle}>Suggested categories — click to add</div>
-        <div style={S.chipGrid}>
-          {suggestions.map((s) => {
+      {/* ════════════════════════════
+          SECTION 1 — Quick add chips
+      ════════════════════════════ */}
+      <div style={{ ...T.card, marginBottom: 16 }}>
+        <span style={T.label}>Quick add — click to add with default subcategories</span>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {suggestions.map(s => {
             const added = existingNames.has(s.name);
             return (
               <button
                 key={s.name}
-                style={S.chip(added)}
-                onClick={() => handleAddSuggestion(s)}
                 disabled={added}
-                title={added ? "Already added" : `Add ${s.name}`}
+                onClick={() => handleAddSuggestion(s)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 7,
+                  padding: "6px 14px", borderRadius: 20, cursor: added ? "default" : "pointer",
+                  fontSize: 13, fontWeight: 500, fontFamily: "inherit",
+                  transition: "all 0.15s",
+                  background: added ? "rgba(16,185,129,0.1)" : "rgba(255,255,255,0.05)",
+                  border: added ? "1px solid rgba(16,185,129,0.25)" : "1px solid rgba(255,255,255,0.1)",
+                  color: added ? "#10B981" : "rgba(255,255,255,0.6)",
+                  opacity: added ? 0.8 : 1,
+                }}
               >
-                <span style={S.chipIcon}>{s.icon}</span>
-                {s.name.charAt(0) + s.name.slice(1).toLowerCase()}
-                {added && " ✓"}
+                <span>{s.icon}</span>
+                <span>{s.name.charAt(0) + s.name.slice(1).toLowerCase()}</span>
+                {added && <span style={{ fontSize: 11, opacity: 0.7 }}>✓</span>}
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* ════════════════════════════════════════
-          CREATE NEW CUSTOM CATEGORY
-      ════════════════════════════════════════ */}
-      <div style={S.card}>
-        <div style={S.cardTitle}>Create a new custom category</div>
-
-        <label style={S.label}>Category name</label>
-        <input
-          style={S.input}
-          placeholder={
-            activeType === "EXPENSE"
-              ? "e.g. PARTY, PETS, HOBBY"
-              : "e.g. SIDE HUSTLE, GIFT"
-          }
-          value={newCatName}
-          onChange={(e) => setNewCatName(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-        />
-
-        <label style={S.label}>
-          Subcategories (optional — comma separated)
-        </label>
-        <input
-          style={S.input}
-          placeholder={
-            activeType === "EXPENSE"
-              ? "e.g. Birthday, Anniversary, Get-together"
-              : "e.g. YouTube, Instagram, Podcast"
-          }
-          value={newCatSubs}
-          onChange={(e) => setNewCatSubs(e.target.value)}
-        />
-
-        <button
-          style={S.createBtn(color)}
-          onClick={handleCreate}
-          disabled={creating}
-        >
-          {creating
-            ? "Creating…"
-            : `+ Create ${activeType.toLowerCase()} category`}
-        </button>
-      </div>
-
-      {/* ════════════════════════════════════════
-          USER'S CATEGORIES
-          Shows all categories with their subcategories.
-          Each subcategory has a × to remove it.
-          Each category has an input to add more subcategories.
-      ════════════════════════════════════════ */}
-      <div
-        style={{
-          ...S.card,
-          background: "transparent",
-          border: "none",
-          padding: 0,
-        }}
-      >
-        <div
-          style={{
-            fontSize: 11,
-            fontWeight: 500,
-            color: "rgba(255,255,255,0.3)",
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-            marginBottom: 14,
-          }}
-        >
-          Your {activeType.toLowerCase()} categories ({filtered.length})
-        </div>
-
-        {loading ? (
-          <div style={S.spinner} />
-        ) : filtered.length === 0 ? (
-          <div
+      {/* ════════════════════════════
+          SECTION 2 — Create custom
+      ════════════════════════════ */}
+      <div style={{ ...T.card, marginBottom: 24 }}>
+        <span style={T.label}>Create a custom category</span>
+        <div className="create-form-row">
+          <input
+            style={{ ...T.input, flex: 2 }}
+            placeholder={activeType === "EXPENSE" ? "Name — e.g. PETS, PARTY" : "Name — e.g. ROYALTIES"}
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && handleCreate()}
+          />
+          <input
+            style={{ ...T.input, flex: 3 }}
+            placeholder="Subcategories (comma-separated, optional)"
+            value={newSubs}
+            onChange={e => setNewSubs(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && handleCreate()}
+          />
+          <button
+            onClick={handleCreate}
+            disabled={creating}
             style={{
-              textAlign: "center",
-              padding: "32px 0",
-              color: "rgba(255,255,255,0.2)",
-              fontSize: 13,
+              padding: "9px 20px", borderRadius: 8, cursor: "pointer",
+              background: `linear-gradient(135deg, ${activeColor}, ${activeColor}BB)`,
+              border: "none", color: "#fff", fontSize: 13, fontWeight: 500,
+              fontFamily: "inherit", opacity: creating ? 0.6 : 1, whiteSpace: "nowrap",
             }}
           >
-            No categories yet — add from suggestions above or create a custom
-            one
-          </div>
-        ) : (
-          <div style={S.catGrid}>
-            {filtered.map((cat) => (
-              <div key={cat.id} style={S.catCard(color)}>
-                {/* Category header */}
-                <div style={S.catHeader}>
-                  <div>
-                    <div style={S.catName}>
-                      {/* Show emoji if it matches a suggestion */}
-                      {suggestions.find((s) => s.name === cat.name)?.icon ||
-                        "📁"}{" "}
-                      {cat.name.charAt(0) + cat.name.slice(1).toLowerCase()}
-                    </div>
-                  </div>
-                  <span style={S.catBadge(cat.custom)}>
-                    {cat.custom ? "Custom" : "Default"}
-                  </span>
-                </div>
-
-                {/* Subcategory pills */}
-                {cat.subCategories && cat.subCategories.length > 0 ? (
-                  <div style={S.subWrap}>
-                    {cat.subCategories.map((sub) => (
-                      <div key={sub} style={S.subPill}>
-                        <span>{sub}</span>
-                        <button
-                          style={S.subDel}
-                          onClick={() => handleRemoveSub(cat.id, sub)}
-                          title={`Remove ${sub}`}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div
-                    style={{
-                      fontSize: 11,
-                      color: "rgba(255,255,255,0.2)",
-                      marginBottom: 10,
-                    }}
-                  >
-                    No subcategories yet
-                  </div>
-                )}
-
-                {/* Add subcategory inline */}
-                <div style={S.addSubRow}>
-                  <input
-                    style={S.addSubInput}
-                    placeholder="Add subcategory…"
-                    value={subInputs[cat.id] || ""}
-                    onChange={(e) =>
-                      setSubInputs((prev) => ({
-                        ...prev,
-                        [cat.id]: e.target.value,
-                      }))
-                    }
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter")
-                        handleAddSub(cat.id, subInputs[cat.id]);
-                    }}
-                  />
-                  <button
-                    style={S.addSubBtn(color)}
-                    onClick={() => handleAddSub(cat.id, subInputs[cat.id])}
-                  >
-                    + Add
-                  </button>
-                </div>
-
-                {/* Delete button — only for custom categories */}
-                {cat.custom && (
-                  <button
-                    style={S.deleteBtn}
-                    onClick={() => handleDeleteCategory(cat)}
-                  >
-                    Delete category
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+            {creating ? "Adding…" : "+ Create"}
+          </button>
+        </div>
       </div>
 
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      {/* ════════════════════════════
+          SECTION 3 — Your categories
+      ════════════════════════════ */}
+      <div style={{ marginBottom: 8, display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={T.label}>
+          Your {activeType.toLowerCase()} categories
+        </span>
+        <span style={{
+          fontSize: 11, padding: "2px 8px", borderRadius: 20,
+          background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.35)",
+          marginTop: -10,
+        }}>
+          {filtered.length}
+        </span>
+      </div>
+
+      {loading ? (
+        <div style={{ display: "flex", justifyContent: "center", padding: "40px 0" }}>
+          <div style={{ width: 24, height: 24, border: "2px solid rgba(99,179,255,0.15)", borderTopColor: "#63B3FF", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+        </div>
+      ) : filtered.length === 0 ? (
+        <div style={{
+          textAlign: "center", padding: "40px 20px",
+          background: "#0D1117", border: "1px solid rgba(255,255,255,0.07)",
+          borderRadius: 14, color: "rgba(255,255,255,0.2)", fontSize: 13,
+        }}>
+          <div style={{ fontSize: 32, marginBottom: 10 }}>📂</div>
+          <p>No {activeType.toLowerCase()} categories yet.</p>
+          <p style={{ marginTop: 4 }}>Click a chip above to add one, or create a custom category.</p>
+        </div>
+      ) : (
+        <div className="cat-cards-grid">
+          {filtered.map((cat, i) => (
+            <CategoryCard
+              key={cat.id}
+              cat={cat}
+              accentColor={CARD_ACCENTS[i % CARD_ACCENTS.length]}
+              onAddSub={handleAddSub}
+              onRemoveSub={handleRemoveSub}
+              onDelete={handleDelete}
+            />
+          ))}
+        </div>
+      )}
+
+      <style>{`
+        .cat-page-wrap {
+          padding: 16px;
+          min-height: 100vh;
+          color: #E8EDF5;
+          font-family: 'DM Sans', 'Segoe UI', sans-serif;
+        }
+        .create-form-row {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .create-form-row input {
+          width: 100%;
+          box-sizing: border-box;
+        }
+        .cat-cards-grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 10px;
+        }
+        @media (min-width: 600px) {
+          .create-form-row {
+            flex-direction: row;
+          }
+          .create-form-row input {
+            width: auto;
+          }
+        }
+        @media (min-width: 640px) {
+          .cat-cards-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (min-width: 900px) {
+          .cat-page-wrap { padding: 36px 40px; }
+          .cat-cards-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
     </div>
   );
 }
