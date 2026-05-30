@@ -14,6 +14,7 @@ import TransactionModal from "./components/TransactionModal";
 import AccountTransferModal from "./components/AccountTransferModal";
 import Toast from "./components/Toast";
 import CategoriesPage from "./components/CategoriesPage";
+import ChangePasswordPage from "./components/ChangePasswordPage";
 
 function getEmailFromToken(token) {
   try { return JSON.parse(atob(token.split(".")[1])).sub; }
@@ -210,14 +211,31 @@ export default function App() {
 
   const renderPage = () => {
     switch (activePage) {
-      case "dashboard":    return <DashboardPage    {...sharedProps} />;
+      case "dashboard":
+        return <DashboardPage {...sharedProps} />;
       // ── Pass accounts so the Account column resolves names ──
-      case "transactions": return <TransactionsPage {...sharedProps} />;
-      case "analytics":    return <AnalyticsPage    {...sharedProps} />;
-      case "budget":       return <BudgetPage       {...sharedProps} />;
-      case "recurring":    return <RecurringPage showToast={showToast} onRefresh={() => { fetchDashboardData(); fetchAccounts(); }} />;
-      case "categories":   return <CategoriesPage showToast={showToast} />;
-      default:             return <DashboardPage    {...sharedProps} />;
+      case "transactions":
+        return <TransactionsPage {...sharedProps} />;
+      case "analytics":
+        return <AnalyticsPage {...sharedProps} />;
+      case "budget":
+        return <BudgetPage {...sharedProps} />;
+      case "recurring":
+        return (
+          <RecurringPage
+            showToast={showToast}
+            onRefresh={() => {
+              fetchDashboardData();
+              fetchAccounts();
+            }}
+          />
+        );
+      case "categories":
+        return <CategoriesPage showToast={showToast} />;
+      case "settings":
+        return <ChangePasswordPage showToast={showToast} />;
+      default:
+        return <DashboardPage {...sharedProps} />;
     }
   };
 

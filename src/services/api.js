@@ -65,6 +65,15 @@ export const categoryAPI = {
   removeSubCategory:(id, subName)   => api.delete(`/categories/${id}/subcategories/${subName}`),
   delete:           (id)            => api.delete(`/categories/${id}`),
 };
+// Add this to your existing api.js file
+export const authAPI = {
+  forgotPassword: (email) => 
+    api.post('/auth/forgot-password', { email }),
+  resetPassword: (email, otp, newPassword) => 
+    api.post('/auth/reset-password', { email, otp, newPassword }),
+  changePassword: (currentPassword, newPassword) => 
+    api.post('/auth/change-password', { currentPassword, newPassword }),
+};
 // Add this at the bottom of api.js — AFTER the api instance is created
 
 api.interceptors.response.use(

@@ -6,7 +6,8 @@ const NAV = [
   { id: "analytics", icon: "◉", label: "Analytics" },
   { id: "budget", icon: "◎", label: "Budget Goals" },
   { id: "recurring", icon: "↺", label: "Recurring" },
-  { id: "categories", icon: "⊞", label: "Categories" }, // ← ADD THIS
+  { id: "categories", icon: "⊞", label: "Categories" },
+  { id: "settings", icon: "⚙", label: "Settings" }, // ← ADD THIS
 ];
 
 const ACCOUNT_ACCENTS = ["#63B3FF","#10B981","#8B5CF6","#F59E0B","#EC4899","#6366F1"];
