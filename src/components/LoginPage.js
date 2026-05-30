@@ -3,7 +3,6 @@ import { login, register } from "../services/authService";
 import { authAPI } from "../services/api";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 
-// ── Feature highlights shown on the left panel ─────────────────────────────
 const FEATURES = [
   {
     icon: "📊",
@@ -27,9 +26,17 @@ const FEATURES = [
   },
 ];
 
-// ── Reusable styled input field ────────────────────────────────────────────
-// Handles both text and password types
-// Password type gets an eye toggle button
+// ── Slow backend warning messages — shown after N seconds of waiting ────────
+// Render free tier cold starts take 30-60s. These messages reassure the user.
+const SLOW_MESSAGES = [
+  { after: 4, text: "Connecting to server…" },
+  { after: 10, text: "Server is waking up, please wait…" },
+  { after: 20, text: "Almost there — free servers take up to 60s to start…" },
+  { after: 40, text: "Still connecting… thank you for your patience." },
+];
+
+const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
 function Field({ label, type = "text", value, onChange, placeholder, hint }) {
   const [focused, setFocused] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -37,7 +44,6 @@ function Field({ label, type = "text", value, onChange, placeholder, hint }) {
 
   return (
     <div style={{ marginBottom: 18 }}>
-      {/* Label row — label on left, hint on right */}
       <div
         style={{
           display: "flex",
@@ -64,8 +70,6 @@ function Field({ label, type = "text", value, onChange, placeholder, hint }) {
           </span>
         )}
       </div>
-
-      {/* Input wrapper — relative so eye button can be positioned inside */}
       <div style={{ position: "relative" }}>
         <input
           type={isPassword ? (showPassword ? "text" : "password") : type}
@@ -91,8 +95,6 @@ function Field({ label, type = "text", value, onChange, placeholder, hint }) {
             caretColor: "#63B3FF",
           }}
         />
-
-        {/* Eye toggle — only shown for password fields */}
         {isPassword && (
           <button
             type="button"
@@ -108,7 +110,6 @@ function Field({ label, type = "text", value, onChange, placeholder, hint }) {
               color: "rgba(255,255,255,0.4)",
               display: "flex",
               alignItems: "center",
-              justifyContent: "center",
               padding: 0,
             }}
           >
@@ -120,9 +121,6 @@ function Field({ label, type = "text", value, onChange, placeholder, hint }) {
   );
 }
 
-// ── Password strength indicator ────────────────────────────────────────────
-// Shows 3 bar segments + label: Weak / Medium / Strong
-// Only renders when password has content
 function PasswordStrength({ password }) {
   const checks = [
     { label: "6+ characters", pass: password.length >= 6 },
@@ -132,12 +130,10 @@ function PasswordStrength({ password }) {
   const score = checks.filter((c) => c.pass).length;
   const colors = ["#EF4444", "#F59E0B", "#10B981"];
   const strengthLabels = ["Weak", "Medium", "Strong"];
-
   if (!password) return null;
 
   return (
     <div style={{ marginTop: -10, marginBottom: 18 }}>
-      {/* Strength bar */}
       <div
         style={{
           display: "flex",
@@ -172,8 +168,6 @@ function PasswordStrength({ password }) {
           {score > 0 ? strengthLabels[score - 1] : ""}
         </span>
       </div>
-
-      {/* Individual check labels */}
       <div style={{ display: "flex", gap: 12 }}>
         {checks.map((c) => (
           <span
@@ -195,41 +189,30 @@ function PasswordStrength({ password }) {
   );
 }
 
-// ── 6-digit OTP input boxes ────────────────────────────────────────────────
-// Each digit gets its own box
-// Auto-advances to next box on input
-// Backspace moves to previous box
-// Supports paste — pastes all 6 digits at once
 function OtpInput({ value, onChange }) {
   const inputs = useRef([]);
   const digits = value.split("");
 
   const handleChange = (i, val) => {
-    // Only allow digits
     if (!/^\d*$/.test(val)) return;
     const newDigits = [...digits];
-    newDigits[i] = val.slice(-1); // take last char if multiple pasted
+    newDigits[i] = val.slice(-1);
     onChange(newDigits.join(""));
-    // Auto advance to next box
     if (val && i < 5) inputs.current[i + 1]?.focus();
   };
 
   const handleKeyDown = (i, e) => {
-    // On backspace in empty box, go to previous box
-    if (e.key === "Backspace" && !digits[i] && i > 0) {
+    if (e.key === "Backspace" && !digits[i] && i > 0)
       inputs.current[i - 1]?.focus();
-    }
   };
 
   const handlePaste = (e) => {
     e.preventDefault();
-    // Strip non-digits, take first 6
     const pasted = e.clipboardData
       .getData("text")
       .replace(/\D/g, "")
       .slice(0, 6);
     onChange(pasted.padEnd(6, "").slice(0, 6));
-    // Focus last filled box
     inputs.current[Math.min(pasted.length, 5)]?.focus();
   };
 
@@ -275,67 +258,131 @@ function OtpInput({ value, onChange }) {
   );
 }
 
-// ── Main Login Page Component ──────────────────────────────────────────────
-// Manages 4 screens via `screen` state:
-//   "login"    → normal sign in form
-//   "register" → create account form
-//   "forgot"   → enter email to receive OTP
-//   "otp"      → enter OTP + set new password
+// ── Slow-server warning banner ──────────────────────────────────────────────
+// Shown when loading takes longer than expected.
+// Cycles through SLOW_MESSAGES based on elapsed seconds.
+function SlowServerBanner({ elapsedSeconds }) {
+  const msg = [...SLOW_MESSAGES]
+    .reverse()
+    .find((m) => elapsedSeconds >= m.after);
+  if (!msg) return null;
+
+  return (
+    <div
+      style={{
+        background: "rgba(245,158,11,0.08)",
+        border: "1px solid rgba(245,158,11,0.2)",
+        borderRadius: 10,
+        padding: "10px 14px",
+        marginBottom: 16,
+        fontSize: 12,
+        color: "#F59E0B",
+        lineHeight: 1.5,
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        animation: "fadeIn 0.4s ease",
+      }}
+    >
+      {/* Spinning indicator */}
+      <span
+        style={{
+          width: 12,
+          height: 12,
+          flexShrink: 0,
+          border: "2px solid rgba(245,158,11,0.2)",
+          borderTopColor: "#F59E0B",
+          borderRadius: "50%",
+          display: "inline-block",
+          animation: "spin 0.8s linear infinite",
+        }}
+      />
+      {msg.text}
+    </div>
+  );
+}
+
 export default function LoginPage({ onSuccess }) {
-  // ── Screen state ───────────────────────────────────────────────────────
-  // Controls which form is shown
   const [screen, setScreen] = useState("login");
 
-  // ── Login / Register state ─────────────────────────────────────────────
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // ── UI state ───────────────────────────────────────────────────────────
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [mounted, setMounted] = useState(false); // for slide-up animation
+  const [mounted, setMounted] = useState(false);
 
-  // ── Forgot / OTP / Reset state ─────────────────────────────────────────
+  // FIX #3: track how long the request has been loading
+  // so we can show reassuring messages during Render cold starts
+  const [loadingSeconds, setLoadingSeconds] = useState(0);
+  const loadingTimerRef = useRef(null);
+
   const [forgotEmail, setForgotEmail] = useState("");
-  const [otp, setOtp] = useState(""); // 6-digit string
+  const [otp, setOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [otpSuccess, setOtpSuccess] = useState(""); // green message
-  const [resendTimer, setResendTimer] = useState(0); // countdown seconds
+  const [otpSuccess, setOtpSuccess] = useState("");
+  const [resendTimer, setResendTimer] = useState(0);
 
-  // ── Mount animation — triggers slide-up on first render ───────────────
   useEffect(() => {
     const t = setTimeout(() => setMounted(true), 50);
     return () => clearTimeout(t);
   }, []);
 
-  // ── Resend OTP countdown timer ─────────────────────────────────────────
-  // Counts down from 60 to 0 after OTP is sent
-  // While > 0, resend button is disabled
   useEffect(() => {
     if (resendTimer <= 0) return;
     const t = setInterval(() => setResendTimer((p) => p - 1), 1000);
     return () => clearInterval(t);
   }, [resendTimer]);
 
-  // ── Helper: clear all messages ─────────────────────────────────────────
+  // FIX #3: start/stop the elapsed-seconds timer with loading state
+  useEffect(() => {
+    if (loading) {
+      setLoadingSeconds(0);
+      loadingTimerRef.current = setInterval(() => {
+        setLoadingSeconds((s) => s + 1);
+      }, 1000);
+    } else {
+      clearInterval(loadingTimerRef.current);
+      setLoadingSeconds(0);
+    }
+    return () => clearInterval(loadingTimerRef.current);
+  }, [loading]);
+
   const clearErrors = () => {
     setError("");
     setOtpSuccess("");
   };
 
-  // ── Handler: Login or Register ─────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setError("Please enter your email");
+      return;
+    }
+    if (!isValidEmail(trimmedEmail)) {
+      setError("Please enter a valid email address");
+      return;
+    }
+    if (!password) {
+      setError("Please enter your password");
+      return;
+    }
+    if (screen === "register" && password.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
+    }
+
     setLoading(true);
     try {
       const data =
         screen === "login"
-          ? await login(email, password)
-          : await register(email, password);
-      // Brief success flash before navigating to dashboard
+          ? await login(trimmedEmail, password)
+          : await register(trimmedEmail, password);
       setSuccess(true);
       setTimeout(() => onSuccess(data.token, data.email), 700);
     } catch (err) {
@@ -344,22 +391,26 @@ export default function LoginPage({ onSuccess }) {
           err.response?.data?.error ||
           "Something went wrong. Please try again.",
       );
+    } finally {
       setLoading(false);
     }
   };
 
-  // ── Handler: Forgot Password — sends OTP to email ─────────────────────
   const handleForgotSubmit = async (e) => {
     e.preventDefault();
     clearErrors();
-    if (!forgotEmail.trim()) {
+    const trimmedEmail = forgotEmail.trim();
+    if (!trimmedEmail) {
       setError("Please enter your email");
+      return;
+    }
+    if (!isValidEmail(trimmedEmail)) {
+      setError("Please enter a valid email address");
       return;
     }
     setLoading(true);
     try {
-      await authAPI.forgotPassword(forgotEmail.trim());
-      // Move to OTP screen and start 60s resend countdown
+      await authAPI.forgotPassword(trimmedEmail);
       setScreen("otp");
       setResendTimer(60);
     } catch (err) {
@@ -371,16 +422,23 @@ export default function LoginPage({ onSuccess }) {
     }
   };
 
-  // ── Handler: Resend OTP ────────────────────────────────────────────────
-  // Only callable when resendTimer === 0
   const handleResendOtp = async () => {
     if (resendTimer > 0) return;
+    const trimmedEmail = forgotEmail.trim();
+    if (!trimmedEmail) {
+      setError("Please enter your email");
+      return;
+    }
+    if (!isValidEmail(trimmedEmail)) {
+      setError("Please enter a valid email address");
+      return;
+    }
     clearErrors();
     setLoading(true);
     try {
-      await authAPI.forgotPassword(forgotEmail.trim());
-      setOtp(""); // clear existing OTP input
-      setResendTimer(60); // restart countdown
+      await authAPI.forgotPassword(trimmedEmail);
+      setOtp("");
+      setResendTimer(60);
       setOtpSuccess("OTP resent successfully");
     } catch (err) {
       setError(err.response?.data?.message || "Failed to resend OTP");
@@ -389,11 +447,9 @@ export default function LoginPage({ onSuccess }) {
     }
   };
 
-  // ── Handler: Reset Password — verifies OTP + sets new password ─────────
   const handleResetSubmit = async (e) => {
     e.preventDefault();
     clearErrors();
-    // Client-side validations
     if (otp.length < 6) {
       setError("Please enter the complete 6-digit OTP");
       return;
@@ -415,7 +471,6 @@ export default function LoginPage({ onSuccess }) {
     try {
       await authAPI.resetPassword(forgotEmail.trim(), otp, newPassword);
       setOtpSuccess("Password reset successful!");
-      // After 2s, go back to login and clear all state
       setTimeout(() => {
         setScreen("login");
         setForgotEmail("");
@@ -433,9 +488,7 @@ export default function LoginPage({ onSuccess }) {
 
   const isLogin = screen === "login";
 
-  // ── Shared reusable styles ─────────────────────────────────────────────
   const S = {
-    // Primary action button — blue gradient
     submitBtn: (disabled) => ({
       width: "100%",
       padding: "13px",
@@ -455,7 +508,6 @@ export default function LoginPage({ onSuccess }) {
       justifyContent: "center",
       gap: 8,
     }),
-    // Back arrow button
     backBtn: {
       background: "none",
       border: "none",
@@ -469,7 +521,6 @@ export default function LoginPage({ onSuccess }) {
       gap: 6,
       marginBottom: 24,
     },
-    // Red error banner
     errorBox: {
       background: "rgba(239,68,68,0.08)",
       border: "1px solid rgba(239,68,68,0.2)",
@@ -483,7 +534,6 @@ export default function LoginPage({ onSuccess }) {
       gap: 10,
       alignItems: "flex-start",
     },
-    // Green success banner
     successBox: {
       background: "rgba(16,185,129,0.08)",
       border: "1px solid rgba(16,185,129,0.2)",
@@ -497,7 +547,6 @@ export default function LoginPage({ onSuccess }) {
       gap: 10,
       alignItems: "flex-start",
     },
-    // Spinner used inside buttons while loading
     spinner: {
       width: 14,
       height: 14,
@@ -519,10 +568,7 @@ export default function LoginPage({ onSuccess }) {
         overflow: "hidden",
       }}
     >
-      {/* ══════════════════════════════════════════
-          LEFT PANEL — branding + feature list
-          Hidden on mobile via CSS class
-      ══════════════════════════════════════════ */}
+      {/* ── Left panel ── */}
       <div
         className="login-left-panel"
         style={{
@@ -538,7 +584,6 @@ export default function LoginPage({ onSuccess }) {
           overflow: "hidden",
         }}
       >
-        {/* Decorative glow blobs — purely visual */}
         <div
           style={{
             position: "absolute",
@@ -567,7 +612,6 @@ export default function LoginPage({ onSuccess }) {
         />
 
         <div>
-          {/* Brand logo + name */}
           <div
             style={{
               display: "flex",
@@ -614,7 +658,6 @@ export default function LoginPage({ onSuccess }) {
             </div>
           </div>
 
-          {/* Tagline */}
           <h2
             style={{
               fontSize: 28,
@@ -642,7 +685,6 @@ export default function LoginPage({ onSuccess }) {
             in one intelligent dashboard.
           </p>
 
-          {/* Feature list */}
           <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
             {FEATURES.map(({ icon, title, desc }) => (
               <div
@@ -691,7 +733,6 @@ export default function LoginPage({ onSuccess }) {
           </div>
         </div>
 
-        {/* Footer */}
         <div
           style={{
             fontSize: 11,
@@ -703,10 +744,7 @@ export default function LoginPage({ onSuccess }) {
         </div>
       </div>
 
-      {/* ══════════════════════════════════════════
-          RIGHT PANEL — auth forms
-          Slides up on mount via opacity/transform
-      ══════════════════════════════════════════ */}
+      {/* ── Right panel — forms ── */}
       <div
         style={{
           flex: 1,
@@ -725,11 +763,7 @@ export default function LoginPage({ onSuccess }) {
             transition: "opacity 0.4s ease, transform 0.4s ease",
           }}
         >
-          {/* ════════════════════════════════════════
-              SCREEN: FORGOT PASSWORD
-              User enters their registered email
-              to receive a 6-digit OTP
-          ════════════════════════════════════════ */}
+          {/* ── FORGOT PASSWORD screen ── */}
           {screen === "forgot" && (
             <>
               <button
@@ -741,7 +775,6 @@ export default function LoginPage({ onSuccess }) {
               >
                 ← Back to sign in
               </button>
-
               <h1
                 style={{
                   fontSize: 24,
@@ -770,6 +803,9 @@ export default function LoginPage({ onSuccess }) {
                 </div>
               )}
 
+              {/* FIX #3: slow server banner on forgot password too */}
+              <SlowServerBanner elapsedSeconds={loadingSeconds} />
+
               <form onSubmit={handleForgotSubmit}>
                 <Field
                   label="Email address"
@@ -795,11 +831,7 @@ export default function LoginPage({ onSuccess }) {
             </>
           )}
 
-          {/* ════════════════════════════════════════
-              SCREEN: OTP VERIFICATION + RESET
-              User enters the 6-digit OTP received
-              by email, then sets their new password
-          ════════════════════════════════════════ */}
+          {/* ── OTP screen ── */}
           {screen === "otp" && (
             <>
               <button
@@ -812,7 +844,6 @@ export default function LoginPage({ onSuccess }) {
               >
                 ← Back
               </button>
-
               <h1
                 style={{
                   fontSize: 24,
@@ -833,7 +864,6 @@ export default function LoginPage({ onSuccess }) {
               >
                 We sent a 6-digit code to
               </p>
-              {/* Show the email the OTP was sent to */}
               <p
                 style={{
                   fontSize: 13,
@@ -845,7 +875,6 @@ export default function LoginPage({ onSuccess }) {
                 {forgotEmail}
               </p>
 
-              {/* Error / success banners */}
               {error && (
                 <div style={S.errorBox}>
                   <span style={{ color: "#EF4444", flexShrink: 0 }}>✕</span>
@@ -860,7 +889,6 @@ export default function LoginPage({ onSuccess }) {
               )}
 
               <form onSubmit={handleResetSubmit}>
-                {/* OTP boxes */}
                 <div style={{ marginBottom: 8 }}>
                   <label
                     style={{
@@ -878,7 +906,6 @@ export default function LoginPage({ onSuccess }) {
                   <OtpInput value={otp} onChange={setOtp} />
                 </div>
 
-                {/* Resend OTP — shows countdown or clickable link */}
                 <div style={{ textAlign: "center", marginBottom: 24 }}>
                   {resendTimer > 0 ? (
                     <span
@@ -905,7 +932,6 @@ export default function LoginPage({ onSuccess }) {
                   )}
                 </div>
 
-                {/* New password */}
                 <Field
                   label="New Password"
                   type="password"
@@ -915,8 +941,6 @@ export default function LoginPage({ onSuccess }) {
                   hint="min. 6 characters"
                 />
                 <PasswordStrength password={newPassword} />
-
-                {/* Confirm new password */}
                 <Field
                   label="Confirm Password"
                   type="password"
@@ -925,7 +949,6 @@ export default function LoginPage({ onSuccess }) {
                   placeholder="••••••••"
                 />
 
-                {/* Live password match indicator */}
                 {confirmPassword && (
                   <div
                     style={{
@@ -942,7 +965,6 @@ export default function LoginPage({ onSuccess }) {
                   </div>
                 )}
 
-                {/* Submit — disabled until OTP is complete */}
                 <button
                   type="submit"
                   style={S.submitBtn(loading || otp.length < 6)}
@@ -960,11 +982,7 @@ export default function LoginPage({ onSuccess }) {
             </>
           )}
 
-          {/* ════════════════════════════════════════
-              SCREEN: LOGIN / REGISTER
-              Default screen shown on app open
-              Tab switcher toggles between the two
-          ════════════════════════════════════════ */}
+          {/* ── LOGIN / REGISTER screen ── */}
           {(screen === "login" || screen === "register") && (
             <>
               <h1
@@ -990,7 +1008,7 @@ export default function LoginPage({ onSuccess }) {
                   : "Start tracking your finances today"}
               </p>
 
-              {/* Sign in / Register tab switcher */}
+              {/* Tab switcher */}
               <div
                 style={{
                   display: "flex",
@@ -1035,7 +1053,6 @@ export default function LoginPage({ onSuccess }) {
                 })}
               </div>
 
-              {/* ── Success animation shown after login/register ── */}
               {success ? (
                 <div style={{ textAlign: "center", padding: "48px 0" }}>
                   <div
@@ -1072,7 +1089,6 @@ export default function LoginPage({ onSuccess }) {
                 </div>
               ) : (
                 <>
-                  {/* Error banner */}
                   {error && (
                     <div style={S.errorBox}>
                       <span
@@ -1087,6 +1103,9 @@ export default function LoginPage({ onSuccess }) {
                       {error}
                     </div>
                   )}
+
+                  {/* FIX #3: show slow-server warning during login/register */}
+                  <SlowServerBanner elapsedSeconds={loadingSeconds} />
 
                   <form onSubmit={handleSubmit}>
                     <Field
@@ -1105,10 +1124,8 @@ export default function LoginPage({ onSuccess }) {
                       hint={!isLogin ? "min. 6 characters" : ""}
                     />
 
-                    {/* Password strength — only on register */}
                     {!isLogin && <PasswordStrength password={password} />}
 
-                    {/* Forgot password link — only on login */}
                     {isLogin && (
                       <div
                         style={{
@@ -1121,7 +1138,7 @@ export default function LoginPage({ onSuccess }) {
                           type="button"
                           onClick={() => {
                             setScreen("forgot");
-                            setForgotEmail(email); // pre-fill email if already typed
+                            setForgotEmail(email);
                             clearErrors();
                           }}
                           style={{
@@ -1138,7 +1155,6 @@ export default function LoginPage({ onSuccess }) {
                       </div>
                     )}
 
-                    {/* Submit button */}
                     <button
                       type="submit"
                       disabled={loading}
@@ -1155,7 +1171,6 @@ export default function LoginPage({ onSuccess }) {
                       )}
                     </button>
 
-                    {/* OR divider */}
                     <div
                       style={{
                         display: "flex",
@@ -1185,7 +1200,6 @@ export default function LoginPage({ onSuccess }) {
                       />
                     </div>
 
-                    {/* Switch between login and register */}
                     <p
                       style={{
                         textAlign: "center",
@@ -1223,9 +1237,9 @@ export default function LoginPage({ onSuccess }) {
         </div>
       </div>
 
-      {/* Global keyframes */}
       <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes spin    { to { transform: rotate(360deg); } }
+        @keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
         input::placeholder { color: rgba(255,255,255,0.2); }
       `}</style>
     </div>
