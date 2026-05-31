@@ -6,11 +6,13 @@ import React from "react";
 // Desktop header is handled inside each page component itself.
 
 const PAGE_TITLES = {
-  dashboard:    "Dashboard",
+  dashboard: "Dashboard",
   transactions: "Transactions",
-  analytics:    "Analytics",
-  budget:       "Budget Goals",
-  recurring:    "Recurring",
+  analytics: "Analytics",
+  budget: "Budget Goals",
+  recurring: "Recurring",
+  categories: "Categories", // was missing
+  settings: "Settings",
 };
 
 export default function MobileHeader({ activePage, onOpenSidebar, onAddTransaction }) {
