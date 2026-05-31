@@ -84,10 +84,11 @@ const Tip = ({ active, payload, label }) => {
   return (
     <div
       style={{
-        background: "#161D2A",
-        border: "1px solid rgba(255,255,255,0.1)",
+        background: "#1E293B",
+        border: "1px solid rgba(255,255,255,0.25)",
         borderRadius: 10,
         padding: "10px 14px",
+        boxShadow: "0 4px 16px rgba(0,0,0,0.5)",
       }}
     >
       <p
@@ -547,7 +548,9 @@ export default function AnalyticsPage({ transactions = [], dashboardData }) {
             </button>
           ))}
           <button
-            onClick={() => exportToCSV(rangedTxns, `analytics-${rangeDays || "all"}d`)}
+            onClick={() =>
+              exportToCSV(rangedTxns, `analytics-${rangeDays || "all"}d`)
+            }
             style={{
               padding: "6px 14px",
               borderRadius: 20,
@@ -759,11 +762,14 @@ export default function AnalyticsPage({ transactions = [], dashboardData }) {
                   <Tooltip
                     formatter={(v) => formatCurrency(v)}
                     contentStyle={{
-                      background: "#161D2A",
-                      border: "1px solid rgba(255,255,255,0.1)",
+                      background: "#1E293B",
+                      border: "1px solid rgba(255,255,255,0.25)",
                       borderRadius: 8,
-                      fontSize: 12,
+                      fontSize: 13,
+                      color: "#F0F4FF",
+                      boxShadow: "0 4px 16px rgba(0,0,0,0.5)",
                     }}
+                    itemStyle={{ color: "#F0F4FF" }}
                   />
                 </PieChart>
               </ResponsiveContainer>

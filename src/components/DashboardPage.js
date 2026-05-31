@@ -120,7 +120,6 @@ export default function DashboardPage({ dashboardData, transactions, accounts = 
 
   return (
     <div className="dash-page">
-
       {/* ══════════════════════════════════════════
           PAGE HEADER
       ══════════════════════════════════════════ */}
@@ -157,7 +156,10 @@ export default function DashboardPage({ dashboardData, transactions, accounts = 
                   style={{ borderLeftColor: accent }}
                 >
                   <div className="account-card-name">{acc.name}</div>
-                  <div className="account-card-balance" style={{ color: accent }}>
+                  <div
+                    className="account-card-balance"
+                    style={{ color: accent }}
+                  >
                     {formatCurrency(acc.balance)}
                   </div>
                   <div className="account-card-sub">Current balance</div>
@@ -166,9 +168,15 @@ export default function DashboardPage({ dashboardData, transactions, accounts = 
             })}
 
             {/* Net worth total card */}
-            <div className="account-card" style={{ borderLeftColor: "#10B981" }}>
+            <div
+              className="account-card"
+              style={{ borderLeftColor: "#10B981" }}
+            >
               <div className="account-card-name">Net Worth</div>
-              <div className="account-card-balance" style={{ color: "#10B981" }}>
+              <div
+                className="account-card-balance"
+                style={{ color: "#10B981" }}
+              >
                 {formatCurrency(netWorth)}
               </div>
               <div className="account-card-sub">All accounts combined</div>
@@ -180,8 +188,8 @@ export default function DashboardPage({ dashboardData, transactions, accounts = 
       {/* No accounts warning */}
       {accounts.length === 0 && (
         <div className="no-accounts-banner">
-          ⚠ No accounts yet. Create accounts like UPI, Cash, Bank, Savings
-          to track balances automatically.
+          ⚠ No accounts yet. Create accounts like UPI, Cash, Bank, Savings to
+          track balances automatically.
         </div>
       )}
 
@@ -192,12 +200,40 @@ export default function DashboardPage({ dashboardData, transactions, accounts = 
       ══════════════════════════════════════════ */}
       <div className="stats-grid">
         {[
-          { label: "Total Balance",  value: balance,            accent: balance >= 0 ? "#10B981" : "#EF4444", sub: "Income − Expenses", isCount: false },
-          { label: "Total Income",   value: totalIncome,        accent: "#10B981", sub: "All time",           isCount: false },
-          { label: "Total Expenses", value: totalExpenditure,   accent: "#EF4444", sub: "All time",           isCount: false },
-          { label: "Transactions",   value: transactions.length,accent: "#63B3FF", sub: "Total records",      isCount: true  },
+          {
+            label: "Total Balance",
+            value: balance,
+            accent: balance >= 0 ? "#10B981" : "#EF4444",
+            sub: "Income − Expenses",
+            isCount: false,
+          },
+          {
+            label: "Total Income",
+            value: totalIncome,
+            accent: "#10B981",
+            sub: "All time",
+            isCount: false,
+          },
+          {
+            label: "Total Expenses",
+            value: totalExpenditure,
+            accent: "#EF4444",
+            sub: "All time",
+            isCount: false,
+          },
+          {
+            label: "Transactions",
+            value: transactions.length,
+            accent: "#63B3FF",
+            sub: "Total records",
+            isCount: true,
+          },
         ].map(({ label, value, accent, sub, isCount }) => (
-          <div key={label} className="stat-card" style={{ borderLeftColor: accent }}>
+          <div
+            key={label}
+            className="stat-card"
+            style={{ borderLeftColor: accent }}
+          >
             <div className="stat-label">{label}</div>
             <div className="stat-value" style={{ color: accent }}>
               {isCount ? value : formatCurrency(value)}
@@ -215,14 +251,14 @@ export default function DashboardPage({ dashboardData, transactions, accounts = 
       <div className="period-grid">
         {[
           { label: "This Month", data: monthlySummary },
-          { label: "This Week",  data: weeklySummary  },
-          { label: "This Year",  data: yearlySummary  },
+          { label: "This Week", data: weeklySummary },
+          { label: "This Year", data: yearlySummary },
         ].map(({ label, data }) => (
           <div key={label} className="dark-card">
             <div className="section-label">{label}</div>
 
             {[
-              { key: "Income",  val: data?.income,      col: "#10B981" },
+              { key: "Income", val: data?.income, col: "#10B981" },
               { key: "Expense", val: data?.expenditure, col: "#EF4444" },
             ].map(({ key, val, col }) => (
               <div key={key} className="period-row">
@@ -237,10 +273,13 @@ export default function DashboardPage({ dashboardData, transactions, accounts = 
 
             <div className="period-row">
               <span className="period-key">Balance</span>
-              <span style={{
-                fontSize: 13, fontWeight: 600,
-                color: (data?.balance ?? 0) >= 0 ? "#63B3FF" : "#EF4444",
-              }}>
+              <span
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: (data?.balance ?? 0) >= 0 ? "#63B3FF" : "#EF4444",
+                }}
+              >
                 {formatCurrency(data?.balance)}
               </span>
             </div>
@@ -255,7 +294,6 @@ export default function DashboardPage({ dashboardData, transactions, accounts = 
           Stacked on mobile → side by side on desktop.
       ══════════════════════════════════════════ */}
       <div className="charts-grid">
-
         {/* ── Area chart — 6 month trend ── */}
         <div className="dark-card">
           <div className="section-label">Income vs Expense — 6 months</div>
@@ -266,33 +304,41 @@ export default function DashboardPage({ dashboardData, transactions, accounts = 
             >
               <defs>
                 <linearGradient id="gIncome" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#10B981" stopOpacity={0.22} />
-                  <stop offset="95%" stopColor="#10B981" stopOpacity={0}    />
+                  <stop offset="5%" stopColor="#10B981" stopOpacity={0.22} />
+                  <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="gExpense" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#EF4444" stopOpacity={0.22} />
-                  <stop offset="95%" stopColor="#EF4444" stopOpacity={0}    />
+                  <stop offset="5%" stopColor="#EF4444" stopOpacity={0.22} />
+                  <stop offset="95%" stopColor="#EF4444" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <XAxis
                 dataKey="name"
                 tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 11 }}
-                axisLine={false} tickLine={false}
+                axisLine={false}
+                tickLine={false}
               />
               <YAxis
                 tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 11 }}
-                axisLine={false} tickLine={false}
+                axisLine={false}
+                tickLine={false}
               />
               <Tooltip content={<ChartTip />} />
               <Area
-                type="monotone" dataKey="Income"
-                stroke="#10B981" strokeWidth={2}
-                fill="url(#gIncome)" dot={false}
+                type="monotone"
+                dataKey="Income"
+                stroke="#10B981"
+                strokeWidth={2}
+                fill="url(#gIncome)"
+                dot={false}
               />
               <Area
-                type="monotone" dataKey="Expense"
-                stroke="#EF4444" strokeWidth={2}
-                fill="url(#gExpense)" dot={false}
+                type="monotone"
+                dataKey="Expense"
+                stroke="#EF4444"
+                strokeWidth={2}
+                fill="url(#gExpense)"
+                dot={false}
               />
             </AreaChart>
           </ResponsiveContainer>
@@ -307,41 +353,72 @@ export default function DashboardPage({ dashboardData, transactions, accounts = 
                 <PieChart>
                   <Pie
                     data={pieData}
-                    cx="50%" cy="50%"
-                    innerRadius={38} outerRadius={62}
-                    dataKey="value" paddingAngle={3}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={38}
+                    outerRadius={62}
+                    dataKey="value"
+                    paddingAngle={3}
                   >
                     {pieData.map((entry, i) => (
                       <Cell key={i} fill={entry.color} />
                     ))}
                   </Pie>
                   <Tooltip
-                    formatter={v => formatCurrency(v)}
+                    formatter={(v) => formatCurrency(v)}
                     contentStyle={{
-                      background: "#161D2A",
-                      border: "1px solid rgba(255,255,255,0.1)",
-                      borderRadius: 8, fontSize: 12,
+                      background: "#1E293B",
+                      border: "1px solid rgba(255,255,255,0.25)",
+                      borderRadius: 8,
+                      fontSize: 13,
+                      color: "#F0F4FF",
+                      boxShadow: "0 4px 16px rgba(0,0,0,0.5)",
                     }}
+                    itemStyle={{ color: "#F0F4FF" }}
                   />
                 </PieChart>
               </ResponsiveContainer>
 
               {/* Category legend */}
               <div style={{ marginTop: 10 }}>
-                {pieData.slice(0, 4).map(d => (
+                {pieData.slice(0, 4).map((d) => (
                   <div
                     key={d.name}
                     style={{
-                      display: "flex", justifyContent: "space-between",
-                      alignItems: "center", padding: "5px 0",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      padding: "5px 0",
                       borderBottom: "1px solid rgba(255,255,255,0.05)",
                     }}
                   >
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div style={{ width: 7, height: 7, borderRadius: "50%", background: d.color }} />
-                      <span style={{ fontSize: 12, color: "rgba(255,255,255,0.45)" }}>{d.name}</span>
+                    <div
+                      style={{ display: "flex", alignItems: "center", gap: 8 }}
+                    >
+                      <div
+                        style={{
+                          width: 7,
+                          height: 7,
+                          borderRadius: "50%",
+                          background: d.color,
+                        }}
+                      />
+                      <span
+                        style={{
+                          fontSize: 12,
+                          color: "rgba(255,255,255,0.45)",
+                        }}
+                      >
+                        {d.name}
+                      </span>
                     </div>
-                    <span style={{ fontSize: 12, fontWeight: 500, color: "#E8EDF5" }}>
+                    <span
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 500,
+                        color: "#E8EDF5",
+                      }}
+                    >
                       {formatCurrency(d.value)}
                     </span>
                   </div>
@@ -349,7 +426,14 @@ export default function DashboardPage({ dashboardData, transactions, accounts = 
               </div>
             </>
           ) : (
-            <p style={{ color: "rgba(255,255,255,0.2)", fontSize: 13, textAlign: "center", marginTop: 40 }}>
+            <p
+              style={{
+                color: "rgba(255,255,255,0.2)",
+                fontSize: 13,
+                textAlign: "center",
+                marginTop: 40,
+              }}
+            >
               No expense data yet
             </p>
           )}
