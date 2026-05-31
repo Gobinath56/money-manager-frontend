@@ -1,13 +1,18 @@
-import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { formatCurrency, formatDateTime } from "../utils/helpers";
 import { exportToCSV } from "../utils/export";
 import { categoryAPI } from "../services/api";
 
-// ── colour maps ────────────────────────────────────────────────────────────
 const CAT_COLORS = {
-  FUEL: "#F59E0B", MOVIE: "#8B5CF6", FOOD: "#F97316",
-  LOAN: "#EF4444", MEDICAL: "#EC4899", SALARY: "#10B981",
-  FREELANCE: "#3B82F6", INVESTMENT: "#6366F1", OTHER: "#6B7280",
+  FUEL: "#F59E0B",
+  MOVIE: "#8B5CF6",
+  FOOD: "#F97316",
+  LOAN: "#EF4444",
+  MEDICAL: "#EC4899",
+  SALARY: "#10B981",
+  FREELANCE: "#3B82F6",
+  INVESTMENT: "#6366F1",
+  OTHER: "#6B7280",
 };
 const DIV_COLORS = { OFFICE: "#8B5CF6", PERSONAL: "#3B82F6" };
 
@@ -16,62 +21,182 @@ function cap(str) {
   return str.charAt(0) + str.slice(1).toLowerCase();
 }
 
+// Short date for mobile: "12 Jun"
+function fmtShortDate(dateStr) {
+  const d = new Date(dateStr);
+  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+}
+
+// Format date range label for export button
+function fmtDateRange(startDate, endDate, count) {
+  if (!startDate && !endDate) return `Export all ${count} records`;
+  if (startDate && endDate)
+    return `Export ${count} records (${startDate} → ${endDate})`;
+  if (startDate) return `Export ${count} records (from ${startDate})`;
+  return `Export ${count} records (until ${endDate})`;
+}
+
 const PAGE_SIZE = 25;
+const ACCOUNT_ACCENTS = [
+  "#63B3FF",
+  "#10B981",
+  "#8B5CF6",
+  "#F59E0B",
+  "#EC4899",
+  "#6366F1",
+];
+
+function getPresetRange(preset) {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  switch (preset) {
+    case "today": {
+      const s = today.toISOString().slice(0, 10);
+      return { start: s, end: s };
+    }
+    case "week": {
+      const s = new Date(today);
+      s.setDate(today.getDate() - 6);
+      return {
+        start: s.toISOString().slice(0, 10),
+        end: today.toISOString().slice(0, 10),
+      };
+    }
+    case "month": {
+      const s = new Date(today.getFullYear(), today.getMonth(), 1);
+      return {
+        start: s.toISOString().slice(0, 10),
+        end: today.toISOString().slice(0, 10),
+      };
+    }
+    case "year": {
+      const s = new Date(today.getFullYear(), 0, 1);
+      return {
+        start: s.toISOString().slice(0, 10),
+        end: today.toISOString().slice(0, 10),
+      };
+    }
+    default:
+      return { start: "", end: "" };
+  }
+}
 
 const S = {
-  page:  { padding: "36px 40px", minHeight: "100vh", color: "#E8EDF5" },
-  title: { fontSize: 26, fontWeight: 600, color: "#F0F4FF", margin: "0 0 4px", letterSpacing: "-0.5px" },
-  sub:   { fontSize: 13, color: "rgba(255,255,255,0.35)", marginBottom: 28 },
-  toolbar: { display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", alignItems: "center" },
+  page: { padding: "36px 40px", minHeight: "100vh", color: "#E8EDF5" },
+  title: {
+    fontSize: 26,
+    fontWeight: 600,
+    color: "#F0F4FF",
+    margin: "0 0 4px",
+    letterSpacing: "-0.5px",
+  },
+  sub: { fontSize: 13, color: "rgba(255,255,255,0.35)", marginBottom: 28 },
+  toolbar: {
+    display: "flex",
+    gap: 10,
+    marginBottom: 14,
+    flexWrap: "wrap",
+    alignItems: "center",
+  },
   search: {
-    flex: 1, minWidth: 180,
-    background: "#0D1117", border: "1px solid rgba(255,255,255,0.1)",
-    borderRadius: 10, padding: "10px 14px",
-    color: "#E8EDF5", fontSize: 13, outline: "none", fontFamily: "inherit",
+    flex: 1,
+    minWidth: 180,
+    background: "#0D1117",
+    border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: 10,
+    padding: "10px 14px",
+    color: "#E8EDF5",
+    fontSize: 13,
+    outline: "none",
+    fontFamily: "inherit",
   },
   select: {
-    background: "#0D1117", border: "1px solid rgba(255,255,255,0.1)",
-    borderRadius: 10, padding: "10px 12px",
-    color: "rgba(255,255,255,0.6)", fontSize: 13,
-    outline: "none", cursor: "pointer", fontFamily: "inherit",
+    background: "#0D1117",
+    border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: 10,
+    padding: "10px 12px",
+    color: "rgba(255,255,255,0.6)",
+    fontSize: 13,
+    outline: "none",
+    cursor: "pointer",
+    fontFamily: "inherit",
   },
   dateInput: {
-    background: "#0D1117", border: "1px solid rgba(255,255,255,0.1)",
-    borderRadius: 10, padding: "10px 12px",
-    color: "rgba(255,255,255,0.6)", fontSize: 13,
-    outline: "none", colorScheme: "dark", fontFamily: "inherit",
+    background: "#0D1117",
+    border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: 10,
+    padding: "10px 12px",
+    color: "rgba(255,255,255,0.6)",
+    fontSize: 13,
+    outline: "none",
+    colorScheme: "dark",
+    fontFamily: "inherit",
   },
   exportBtn: {
-    background: "rgba(99,179,255,0.1)", border: "1px solid rgba(99,179,255,0.25)",
-    color: "#63B3FF", borderRadius: 10, padding: "10px 16px",
-    fontSize: 12, cursor: "pointer", fontWeight: 500, fontFamily: "inherit",
+    background: "rgba(99,179,255,0.1)",
+    border: "1px solid rgba(99,179,255,0.25)",
+    color: "#63B3FF",
+    borderRadius: 10,
+    padding: "10px 16px",
+    fontSize: 12,
+    cursor: "pointer",
+    fontWeight: 500,
+    fontFamily: "inherit",
+    whiteSpace: "nowrap",
   },
   clearBtn: {
-    background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
-    color: "rgba(255,255,255,0.45)", borderRadius: 10,
-    padding: "10px 14px", fontSize: 12, cursor: "pointer", fontFamily: "inherit",
+    background: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(255,255,255,0.1)",
+    color: "rgba(255,255,255,0.45)",
+    borderRadius: 10,
+    padding: "10px 14px",
+    fontSize: 12,
+    cursor: "pointer",
+    fontFamily: "inherit",
   },
-  dateRow: { display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", alignItems: "center" },
+  dateRow: {
+    display: "flex",
+    gap: 10,
+    marginBottom: 14,
+    flexWrap: "wrap",
+    alignItems: "center",
+  },
   dateLabel: {
-    fontSize: 11, color: "rgba(255,255,255,0.3)",
-    textTransform: "uppercase", letterSpacing: "0.07em", alignSelf: "center",
+    fontSize: 11,
+    color: "rgba(255,255,255,0.3)",
+    textTransform: "uppercase",
+    letterSpacing: "0.07em",
+    alignSelf: "center",
   },
   quickBtn: (active) => ({
-    padding: "6px 12px", borderRadius: 20, fontSize: 11, fontWeight: 500,
-    cursor: "pointer", transition: "all 0.15s", fontFamily: "inherit",
+    padding: "6px 12px",
+    borderRadius: 20,
+    fontSize: 11,
+    fontWeight: 500,
+    cursor: "pointer",
+    transition: "all 0.15s",
+    fontFamily: "inherit",
     background: active ? "rgba(99,179,255,0.15)" : "rgba(255,255,255,0.04)",
-    border: active ? "1px solid rgba(99,179,255,0.3)" : "1px solid rgba(255,255,255,0.08)",
+    border: active
+      ? "1px solid rgba(99,179,255,0.3)"
+      : "1px solid rgba(255,255,255,0.08)",
     color: active ? "#63B3FF" : "rgba(255,255,255,0.4)",
   }),
   tableWrap: {
-    background: "#0D1117", border: "1px solid rgba(255,255,255,0.07)",
-    borderRadius: 16, overflow: "hidden",
+    background: "#0D1117",
+    border: "1px solid rgba(255,255,255,0.07)",
+    borderRadius: 16,
+    overflow: "hidden",
   },
   table: { width: "100%", borderCollapse: "collapse" },
   th: {
-    padding: "12px 16px", textAlign: "left",
-    fontSize: 10, fontWeight: 500, color: "rgba(255,255,255,0.28)",
-    textTransform: "uppercase", letterSpacing: "0.07em",
+    padding: "12px 16px",
+    textAlign: "left",
+    fontSize: 10,
+    fontWeight: 500,
+    color: "rgba(255,255,255,0.28)",
+    textTransform: "uppercase",
+    letterSpacing: "0.07em",
     borderBottom: "1px solid rgba(255,255,255,0.07)",
     background: "rgba(255,255,255,0.02)",
   },
@@ -79,63 +204,133 @@ const S = {
     borderBottom: "1px solid rgba(255,255,255,0.04)",
     background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.01)",
   }),
-  td: { padding: "12px 16px", fontSize: 13, color: "rgba(255,255,255,0.7)", verticalAlign: "middle" },
+  td: {
+    padding: "12px 16px",
+    fontSize: 13,
+    color: "rgba(255,255,255,0.7)",
+    verticalAlign: "middle",
+  },
   badge: (color) => ({
-    display: "inline-block", padding: "3px 10px", borderRadius: 20,
-    fontSize: 11, fontWeight: 500,
-    background: color + "22", color, border: `1px solid ${color}33`,
+    display: "inline-block",
+    padding: "3px 10px",
+    borderRadius: 20,
+    fontSize: 11,
+    fontWeight: 500,
+    background: color + "22",
+    color,
+    border: `1px solid ${color}33`,
   }),
   actionBtn: (color) => ({
-    background: "none", border: "none", color,
-    cursor: "pointer", padding: "4px 8px", borderRadius: 6,
-    fontSize: 15, transition: "background 0.15s", fontFamily: "inherit",
+    background: "none",
+    border: "none",
+    color,
+    cursor: "pointer",
+    padding: "4px 8px",
+    borderRadius: 6,
+    fontSize: 15,
+    transition: "background 0.15s",
+    fontFamily: "inherit",
   }),
   accChip: (color) => ({
-    display: "inline-flex", alignItems: "center", gap: 5,
-    padding: "2px 9px", borderRadius: 20, fontSize: 11,
-    background: color + "15", color, border: `1px solid ${color}28`,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 5,
+    padding: "2px 9px",
+    borderRadius: 20,
+    fontSize: 11,
+    background: color + "15",
+    color,
+    border: `1px solid ${color}28`,
   }),
   accDot: (color) => ({
-    width: 5, height: 5, borderRadius: "50%",
-    background: color, flexShrink: 0,
+    width: 5,
+    height: 5,
+    borderRadius: "50%",
+    background: color,
+    flexShrink: 0,
   }),
-  overlay:    { position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 },
-  confirmBox: { background: "#0D1117", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 14, padding: "28px 32px", width: 340, textAlign: "center" },
-  sentinel: { height: 40, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.2)", fontSize: 12 },
+  overlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.7)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 200,
+  },
+  confirmBox: {
+    background: "#0D1117",
+    border: "1px solid rgba(239,68,68,0.2)",
+    borderRadius: 14,
+    padding: "28px 32px",
+    width: 340,
+    textAlign: "center",
+  },
+
+  // Pagination
+  paginationBar: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "14px 20px",
+    borderTop: "1px solid rgba(255,255,255,0.07)",
+    background: "rgba(255,255,255,0.01)",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  pageBtn: (active, disabled) => ({
+    padding: "6px 12px",
+    borderRadius: 8,
+    fontSize: 12,
+    fontWeight: active ? 600 : 400,
+    cursor: disabled ? "not-allowed" : "pointer",
+    fontFamily: "inherit",
+    background: active ? "rgba(99,179,255,0.15)" : "rgba(255,255,255,0.04)",
+    border: active
+      ? "1px solid rgba(99,179,255,0.3)"
+      : "1px solid rgba(255,255,255,0.08)",
+    color: disabled
+      ? "rgba(255,255,255,0.15)"
+      : active
+        ? "#63B3FF"
+        : "rgba(255,255,255,0.5)",
+    transition: "all 0.15s",
+    minWidth: 36,
+    textAlign: "center",
+  }),
+  pageSizeSelect: {
+    background: "#0D1117",
+    border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: 8,
+    padding: "6px 10px",
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 12,
+    outline: "none",
+    cursor: "pointer",
+    fontFamily: "inherit",
+  },
 };
 
-const ACCOUNT_ACCENTS = ["#63B3FF","#10B981","#8B5CF6","#F59E0B","#EC4899","#6366F1"];
-
-function getPresetRange(preset) {
-  const now   = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  switch (preset) {
-    case "today": { const s = today.toISOString().slice(0,10); return { start: s, end: s }; }
-    case "week":  { const s = new Date(today); s.setDate(today.getDate()-6); return { start: s.toISOString().slice(0,10), end: today.toISOString().slice(0,10) }; }
-    case "month": { const s = new Date(today.getFullYear(), today.getMonth(), 1); return { start: s.toISOString().slice(0,10), end: today.toISOString().slice(0,10) }; }
-    case "year":  { const s = new Date(today.getFullYear(), 0, 1); return { start: s.toISOString().slice(0,10), end: today.toISOString().slice(0,10) }; }
-    default: return { start: "", end: "" };
-  }
-}
-
-export default function TransactionsPage({ transactions, accounts = [], onEdit, onDelete }) {
-  const [search,       setSearch]       = useState("");
-  const [filterType,   setFilterType]   = useState("");
-  const [filterDiv,    setFilterDiv]    = useState("");
-  const [filterCat,    setFilterCat]    = useState("");
-  const [filterAcct,   setFilterAcct]   = useState("");
-  const [startDate,    setStartDate]    = useState("");
-  const [endDate,      setEndDate]      = useState("");
+export default function TransactionsPage({
+  transactions,
+  accounts = [],
+  onEdit,
+  onDelete,
+}) {
+  const [search, setSearch] = useState("");
+  const [filterType, setFilterType] = useState("");
+  const [filterDiv, setFilterDiv] = useState("");
+  const [filterCat, setFilterCat] = useState("");
+  const [filterAcct, setFilterAcct] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [activePreset, setActivePreset] = useState("");
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-  const [confirmId,    setConfirmId]    = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE);
+  const [confirmId, setConfirmId] = useState(null);
 
-  // ── Live category list for filter dropdown ──────────────────────────────
-  // KEY CHANGE: was built from transactions array (only shows categories that
-  // already have transactions). Now fetches ALL user categories from the API
-  // so you can filter by any category even if no transactions exist yet.
-  const [allCategories,  setAllCategories]  = useState([]);
-  const [loadingCats,    setLoadingCats]    = useState(false);
+  const [allCategories, setAllCategories] = useState([]);
+  const [loadingCats, setLoadingCats] = useState(false);
 
   const fetchAllCategories = useCallback(async () => {
     setLoadingCats(true);
@@ -143,95 +338,154 @@ export default function TransactionsPage({ transactions, accounts = [], onEdit, 
       const res = await categoryAPI.getAll();
       setAllCategories(res.data || []);
     } catch {
-      // non-fatal — fall back to deriving from transactions below
       setAllCategories([]);
     } finally {
       setLoadingCats(false);
     }
   }, []);
 
-  useEffect(() => { fetchAllCategories(); }, [fetchAllCategories]);
+  useEffect(() => {
+    fetchAllCategories();
+  }, [fetchAllCategories]);
 
-  // Build the category filter options:
-  // Prefer API list; fall back to unique categories found in transactions.
   const filterCategoryOptions = useMemo(() => {
-    if (allCategories.length > 0) {
-      return allCategories.map(c => c.name).sort();
-    }
-    // fallback
-    const set = new Set(transactions.map(t => t.category).filter(Boolean));
+    if (allCategories.length > 0)
+      return allCategories.map((c) => c.name).sort();
+    const set = new Set(transactions.map((t) => t.category).filter(Boolean));
     return [...set].sort();
   }, [allCategories, transactions]);
-
-  const sentinelRef = useRef(null);
 
   const accountMap = useMemo(() => {
     const map = {};
     accounts.forEach((acc, i) => {
-      map[acc.id] = { name: acc.name, color: ACCOUNT_ACCENTS[i % ACCOUNT_ACCENTS.length] };
+      map[acc.id] = {
+        name: acc.name,
+        color: ACCOUNT_ACCENTS[i % ACCOUNT_ACCENTS.length],
+      };
     });
     return map;
   }, [accounts]);
 
+  // All filtered (used for export — always exports the full filtered set)
   const filtered = useMemo(() => {
     return transactions.filter((t) => {
-      if (search     && !t.description?.toLowerCase().includes(search.toLowerCase())) return false;
-      if (filterType && t.type      !== filterType)  return false;
-      if (filterDiv  && t.division  !== filterDiv)   return false;
-      if (filterCat  && t.category  !== filterCat)   return false;
-      if (filterAcct && t.accountId !== filterAcct)  return false;
+      if (
+        search &&
+        !t.description?.toLowerCase().includes(search.toLowerCase())
+      )
+        return false;
+      if (filterType && t.type !== filterType) return false;
+      if (filterDiv && t.division !== filterDiv) return false;
+      if (filterCat && t.category !== filterCat) return false;
+      if (filterAcct && t.accountId !== filterAcct) return false;
       if (startDate) {
-        const tDate = new Date(t.date); tDate.setHours(0,0,0,0);
+        const tDate = new Date(t.date);
+        tDate.setHours(0, 0, 0, 0);
         if (tDate < new Date(startDate)) return false;
       }
       if (endDate) {
-        const tDate = new Date(t.date); tDate.setHours(23,59,59,999);
-        const e = new Date(endDate); e.setHours(23,59,59,999);
+        const tDate = new Date(t.date);
+        tDate.setHours(23, 59, 59, 999);
+        const e = new Date(endDate);
+        e.setHours(23, 59, 59, 999);
         if (tDate > e) return false;
       }
       return true;
     });
-  }, [transactions, search, filterType, filterDiv, filterCat, filterAcct, startDate, endDate]);
+  }, [
+    transactions,
+    search,
+    filterType,
+    filterDiv,
+    filterCat,
+    filterAcct,
+    startDate,
+    endDate,
+  ]);
 
-  const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
-  const hasMore = visibleCount < filtered.length;
-
-  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [search, filterType, filterDiv, filterCat, filterAcct, startDate, endDate]);
-
-  const loadMore = useCallback(() => {
-    setVisibleCount(c => Math.min(c + PAGE_SIZE, filtered.length));
-  }, [filtered.length]);
-
+  // Reset to page 1 whenever filters change
   useEffect(() => {
-    const el = sentinelRef.current;
-    if (!el) return;
-    const obs = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting && hasMore) loadMore(); },
-      { rootMargin: "120px" }
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [hasMore, loadMore]);
+    setCurrentPage(1);
+  }, [
+    search,
+    filterType,
+    filterDiv,
+    filterCat,
+    filterAcct,
+    startDate,
+    endDate,
+    pageSize,
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+
+  // Current page slice
+  const pageSlice = useMemo(() => {
+    const start = (safePage - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, safePage, pageSize]);
+
+  // Page numbers to render (show up to 7 buttons with ellipsis)
+  const pageNumbers = useMemo(() => {
+    if (totalPages <= 7)
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    const pages = [];
+    pages.push(1);
+    if (safePage > 3) pages.push("...");
+    for (
+      let p = Math.max(2, safePage - 1);
+      p <= Math.min(totalPages - 1, safePage + 1);
+      p++
+    ) {
+      pages.push(p);
+    }
+    if (safePage < totalPages - 2) pages.push("...");
+    pages.push(totalPages);
+    return pages;
+  }, [totalPages, safePage]);
 
   const applyPreset = (preset) => {
     if (activePreset === preset) {
-      setActivePreset(""); setStartDate(""); setEndDate("");
+      setActivePreset("");
+      setStartDate("");
+      setEndDate("");
     } else {
       const range = getPresetRange(preset);
-      setActivePreset(preset); setStartDate(range.start); setEndDate(range.end);
+      setActivePreset(preset);
+      setStartDate(range.start);
+      setEndDate(range.end);
     }
   };
 
-  const handleStartDate = (v) => { setStartDate(v); setActivePreset(""); };
-  const handleEndDate   = (v) => { setEndDate(v);   setActivePreset(""); };
-
-  const clearAll = () => {
-    setSearch(""); setFilterType(""); setFilterDiv("");
-    setFilterCat(""); setFilterAcct("");
-    setStartDate(""); setEndDate(""); setActivePreset("");
+  const handleStartDate = (v) => {
+    setStartDate(v);
+    setActivePreset("");
+  };
+  const handleEndDate = (v) => {
+    setEndDate(v);
+    setActivePreset("");
   };
 
-  const hasFilters = search || filterType || filterDiv || filterCat || filterAcct || startDate || endDate;
+  const clearAll = () => {
+    setSearch("");
+    setFilterType("");
+    setFilterDiv("");
+    setFilterCat("");
+    setFilterAcct("");
+    setStartDate("");
+    setEndDate("");
+    setActivePreset("");
+  };
+
+  const hasFilters =
+    search ||
+    filterType ||
+    filterDiv ||
+    filterCat ||
+    filterAcct ||
+    startDate ||
+    endDate;
 
   const handleConfirmDelete = async () => {
     if (!confirmId) return;
@@ -239,21 +493,50 @@ export default function TransactionsPage({ transactions, accounts = [], onEdit, 
     setConfirmId(null);
   };
 
-  return (
-    <div style={S.page}>
+  // Export label shows exactly what range is being exported
+  const exportLabel = fmtDateRange(startDate, endDate, filtered.length);
 
+  const startRecord = (safePage - 1) * pageSize + 1;
+  const endRecord = Math.min(safePage * pageSize, filtered.length);
+
+  return (
+    <div className="txn-page-wrap">
       {/* ── Header ── */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          marginBottom: 6,
+          gap: 10,
+          flexWrap: "wrap",
+        }}
+      >
         <h1 style={S.title}>Transactions</h1>
-        <button style={S.exportBtn} onClick={() => exportToCSV(filtered, "transactions")}>
-          ↓ Export CSV ({filtered.length})
+        <button
+          style={S.exportBtn}
+          onClick={() => {
+            if (filtered.length === 0) {
+              alert("No transactions to export");
+              return;
+            }
+            const label =
+              startDate || endDate
+                ? `transactions-${startDate || "start"}-to-${endDate || "end"}`
+                : "transactions-all";
+            exportToCSV(filtered, label);
+          }}
+          title={exportLabel}
+        >
+          ↓ {exportLabel}
         </button>
       </div>
+
       <p style={S.sub}>
         {filtered.length === transactions.length
           ? `${transactions.length} total records`
           : `${filtered.length} of ${transactions.length} records`}
-        {hasMore && ` · showing first ${visible.length}`}
+        {filtered.length > 0 && ` · showing ${startRecord}–${endRecord}`}
       </p>
 
       {/* ── Filters ── */}
@@ -262,61 +545,104 @@ export default function TransactionsPage({ transactions, accounts = [], onEdit, 
           style={S.search}
           placeholder="Search by description…"
           value={search}
-          onChange={e => setSearch(e.target.value)}
+          onChange={(e) => setSearch(e.target.value)}
         />
-
-        <select style={S.select} value={filterType} onChange={e => setFilterType(e.target.value)}>
+        <select
+          style={S.select}
+          value={filterType}
+          onChange={(e) => setFilterType(e.target.value)}
+        >
           <option value="">All types</option>
           <option value="INCOME">Income</option>
           <option value="EXPENSE">Expense</option>
         </select>
-
-        <select style={S.select} value={filterDiv} onChange={e => setFilterDiv(e.target.value)}>
+        <select
+          style={S.select}
+          value={filterDiv}
+          onChange={(e) => setFilterDiv(e.target.value)}
+        >
           <option value="">All divisions</option>
           <option value="PERSONAL">Personal</option>
           <option value="OFFICE">Office</option>
         </select>
-
-        {/* ── Category filter — now from API ── */}
         <select
           style={S.select}
           value={filterCat}
-          onChange={e => setFilterCat(e.target.value)}
+          onChange={(e) => setFilterCat(e.target.value)}
           disabled={loadingCats}
         >
-          <option value="">{loadingCats ? "Loading…" : "All categories"}</option>
-          {filterCategoryOptions.map(name => (
-            <option key={name} value={name}>{cap(name)}</option>
+          <option value="">
+            {loadingCats ? "Loading…" : "All categories"}
+          </option>
+          {filterCategoryOptions.map((name) => (
+            <option key={name} value={name}>
+              {cap(name)}
+            </option>
           ))}
         </select>
-
         {accounts.length > 0 && (
-          <select style={S.select} value={filterAcct} onChange={e => setFilterAcct(e.target.value)}>
+          <select
+            style={S.select}
+            value={filterAcct}
+            onChange={(e) => setFilterAcct(e.target.value)}
+          >
             <option value="">All accounts</option>
-            {accounts.map(acc => (
-              <option key={acc.id} value={acc.id}>{acc.name}</option>
+            {accounts.map((acc) => (
+              <option key={acc.id} value={acc.id}>
+                {acc.name}
+              </option>
             ))}
           </select>
         )}
-
         {hasFilters && (
-          <button style={S.clearBtn} onClick={clearAll}>Clear all</button>
+          <button style={S.clearBtn} onClick={clearAll}>
+            Clear all
+          </button>
         )}
       </div>
 
-      {/* ── Date range row ── */}
+      {/* ── Date range ── */}
       <div style={S.dateRow}>
         <span style={S.dateLabel}>Date:</span>
-        {["today","week","month","year"].map(p => (
-          <button key={p} style={S.quickBtn(activePreset === p)} onClick={() => applyPreset(p)}>
-            {p === "today" ? "Today" : p === "week" ? "Last 7d" : p === "month" ? "This month" : "This year"}
+        {["today", "week", "month", "year"].map((p) => (
+          <button
+            key={p}
+            style={S.quickBtn(activePreset === p)}
+            onClick={() => applyPreset(p)}
+          >
+            {p === "today"
+              ? "Today"
+              : p === "week"
+                ? "Last 7d"
+                : p === "month"
+                  ? "This month"
+                  : "This year"}
           </button>
         ))}
-        <input type="date" style={S.dateInput} value={startDate} max={endDate || undefined} onChange={e => handleStartDate(e.target.value)} />
+        <input
+          type="date"
+          style={S.dateInput}
+          value={startDate}
+          max={endDate || undefined}
+          onChange={(e) => handleStartDate(e.target.value)}
+        />
         <span style={{ color: "rgba(255,255,255,0.2)", fontSize: 12 }}>→</span>
-        <input type="date" style={S.dateInput} value={endDate} min={startDate || undefined} onChange={e => handleEndDate(e.target.value)} />
+        <input
+          type="date"
+          style={S.dateInput}
+          value={endDate}
+          min={startDate || undefined}
+          onChange={(e) => handleEndDate(e.target.value)}
+        />
         {(startDate || endDate) && (
-          <button style={S.clearBtn} onClick={() => { setStartDate(""); setEndDate(""); setActivePreset(""); }}>
+          <button
+            style={S.clearBtn}
+            onClick={() => {
+              setStartDate("");
+              setEndDate("");
+              setActivePreset("");
+            }}
+          >
             Clear dates
           </button>
         )}
@@ -327,71 +653,206 @@ export default function TransactionsPage({ transactions, accounts = [], onEdit, 
         <table style={S.table}>
           <thead>
             <tr>
-              {["Date & Time","Description","Account","Category","Sub","Division","Type","Amount","Actions"].map(h => (
-                <th key={h} style={S.th}>{h}</th>
-              ))}
+              {/* Desktop columns */}
+              <th style={S.th} className="col-date">
+                Date & Time
+              </th>
+              <th style={S.th} className="col-desc">
+                Description
+              </th>
+              <th style={S.th} className="col-desktop">
+                Account
+              </th>
+              <th style={S.th} className="col-desktop">
+                Category
+              </th>
+              <th style={S.th} className="col-desktop">
+                Sub
+              </th>
+              <th style={S.th} className="col-desktop">
+                Division
+              </th>
+              <th style={S.th} className="col-desktop">
+                Type
+              </th>
+              <th
+                style={{ ...S.th, textAlign: "right" }}
+                className="col-amount"
+              >
+                Amount
+              </th>
+              <th
+                style={{ ...S.th, textAlign: "center" }}
+                className="col-actions"
+              >
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody>
-            {visible.length === 0 ? (
+            {pageSlice.length === 0 ? (
               <tr>
-                <td colSpan={9} style={{ ...S.td, textAlign: "center", padding: "48px 0", color: "rgba(255,255,255,0.2)" }}>
-                  {hasFilters ? "No transactions match your filters" : "No transactions yet"}
+                <td
+                  colSpan={9}
+                  style={{
+                    ...S.td,
+                    textAlign: "center",
+                    padding: "48px 0",
+                    color: "rgba(255,255,255,0.2)",
+                  }}
+                >
+                  {hasFilters
+                    ? "No transactions match your filters"
+                    : "No transactions yet"}
                 </td>
               </tr>
             ) : (
-              visible.map((t, i) => {
+              pageSlice.map((t, i) => {
                 const acct = accountMap[t.accountId];
                 return (
                   <tr key={t.id} style={S.tr(i)}>
-                    <td style={{ ...S.td, whiteSpace: "nowrap", fontSize: 12 }}>
-                      {formatDateTime(t.date)}
+                    {/* Date — mobile shows short, desktop shows full */}
+                    <td
+                      style={{ ...S.td, whiteSpace: "nowrap", fontSize: 12 }}
+                      className="col-date"
+                    >
+                      <span className="date-full">
+                        {formatDateTime(t.date)}
+                      </span>
+                      <span className="date-short">{fmtShortDate(t.date)}</span>
                     </td>
-                    <td style={{ ...S.td, maxWidth: 180 }}>
-                      <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+
+                    {/* Description — always visible */}
+                    <td style={{ ...S.td, maxWidth: 200 }} className="col-desc">
+                      <span
+                        style={{
+                          display: "block",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
                         {t.description}
                       </span>
+                      {/* Mobile-only sub-line: category badge + account */}
+                      <div className="mobile-sub-row">
+                        <span
+                          style={S.badge(CAT_COLORS[t.category] || "#6B7280")}
+                        >
+                          {cap(t.category)}
+                        </span>
+                        {acct && (
+                          <span
+                            style={{ ...S.accChip(acct.color), marginLeft: 4 }}
+                          >
+                            <span style={S.accDot(acct.color)} />
+                            {acct.name}
+                          </span>
+                        )}
+                      </div>
                     </td>
-                    <td style={S.td}>
+
+                    {/* Desktop-only columns */}
+                    <td style={S.td} className="col-desktop">
                       {acct ? (
                         <span style={S.accChip(acct.color)}>
                           <span style={S.accDot(acct.color)} />
                           {acct.name}
                         </span>
                       ) : (
-                        <span style={{ color: "rgba(255,255,255,0.15)", fontSize: 11 }}>—</span>
+                        <span
+                          style={{
+                            color: "rgba(255,255,255,0.15)",
+                            fontSize: 11,
+                          }}
+                        >
+                          —
+                        </span>
                       )}
                     </td>
-                    <td style={S.td}>
-                      <span style={S.badge(CAT_COLORS[t.category] || "#6B7280")}>
+                    <td style={S.td} className="col-desktop">
+                      <span
+                        style={S.badge(CAT_COLORS[t.category] || "#6B7280")}
+                      >
                         {cap(t.category)}
                       </span>
                     </td>
-                    <td style={S.td}>
+                    <td style={S.td} className="col-desktop">
                       {t.subCategory ? (
-                        <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.5)" }}>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            padding: "2px 8px",
+                            borderRadius: 20,
+                            background: "rgba(255,255,255,0.06)",
+                            border: "1px solid rgba(255,255,255,0.1)",
+                            color: "rgba(255,255,255,0.5)",
+                          }}
+                        >
                           {t.subCategory}
                         </span>
                       ) : (
-                        <span style={{ color: "rgba(255,255,255,0.15)", fontSize: 11 }}>—</span>
+                        <span
+                          style={{
+                            color: "rgba(255,255,255,0.15)",
+                            fontSize: 11,
+                          }}
+                        >
+                          —
+                        </span>
                       )}
                     </td>
-                    <td style={S.td}>
-                      <span style={S.badge(DIV_COLORS[t.division] || "#6B7280")}>
+                    <td style={S.td} className="col-desktop">
+                      <span
+                        style={S.badge(DIV_COLORS[t.division] || "#6B7280")}
+                      >
                         {cap(t.division)}
                       </span>
                     </td>
-                    <td style={S.td}>
-                      <span style={S.badge(t.type === "INCOME" ? "#10B981" : "#EF4444")}>
+                    <td style={S.td} className="col-desktop">
+                      <span
+                        style={S.badge(
+                          t.type === "INCOME" ? "#10B981" : "#EF4444",
+                        )}
+                      >
                         {cap(t.type)}
                       </span>
                     </td>
-                    <td style={{ ...S.td, fontWeight: 600, textAlign: "right", whiteSpace: "nowrap", color: t.type === "INCOME" ? "#10B981" : "#EF4444" }}>
-                      {t.type === "INCOME" ? "+" : "-"}{formatCurrency(t.amount)}
+
+                    {/* Amount — always visible */}
+                    <td
+                      style={{
+                        ...S.td,
+                        fontWeight: 600,
+                        textAlign: "right",
+                        whiteSpace: "nowrap",
+                        color: t.type === "INCOME" ? "#10B981" : "#EF4444",
+                      }}
+                      className="col-amount"
+                    >
+                      {t.type === "INCOME" ? "+" : "-"}
+                      {formatCurrency(t.amount)}
                     </td>
-                    <td style={S.td}>
-                      <button style={S.actionBtn("rgba(99,179,255,0.7)")} onClick={() => onEdit(t)} title="Edit">✎</button>
-                      <button style={S.actionBtn("rgba(239,68,68,0.7)")} onClick={() => setConfirmId(t.id)} title="Delete">✕</button>
+
+                    {/* Actions — always visible */}
+                    <td
+                      style={{ ...S.td, textAlign: "center" }}
+                      className="col-actions"
+                    >
+                      <button
+                        style={S.actionBtn("rgba(99,179,255,0.7)")}
+                        onClick={() => onEdit(t)}
+                        title="Edit"
+                      >
+                        ✎
+                      </button>
+                      <button
+                        style={S.actionBtn("rgba(239,68,68,0.7)")}
+                        onClick={() => setConfirmId(t.id)}
+                        title="Delete"
+                      >
+                        ✕
+                      </button>
                     </td>
                   </tr>
                 );
@@ -400,18 +861,81 @@ export default function TransactionsPage({ transactions, accounts = [], onEdit, 
           </tbody>
         </table>
 
-        {/* Infinite scroll sentinel */}
-        <div ref={sentinelRef} style={S.sentinel}>
-          {hasMore
-            ? <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ width: 14, height: 14, border: "2px solid rgba(99,179,255,0.2)", borderTopColor: "#63B3FF", borderRadius: "50%", animation: "spin 0.8s linear infinite", display: "inline-block" }} />
-                Loading more…
+        {/* ── Pagination bar ── */}
+        {filtered.length > 0 && (
+          <div style={S.paginationBar}>
+            {/* Left: record count + page size selector */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>
+                {startRecord}–{endRecord} of {filtered.length}
               </span>
-            : visible.length > 0 && filtered.length > PAGE_SIZE
-              ? <span>All {filtered.length} records shown</span>
-              : null
-          }
-        </div>
+              <select
+                style={S.pageSizeSelect}
+                value={pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value))}
+              >
+                {[10, 25, 50, 100].map((n) => (
+                  <option key={n} value={n}>
+                    {n} / page
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Right: page buttons */}
+            <div
+              style={{
+                display: "flex",
+                gap: 4,
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
+            >
+              {/* Prev */}
+              <button
+                style={S.pageBtn(false, safePage === 1)}
+                disabled={safePage === 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              >
+                ‹
+              </button>
+
+              {pageNumbers.map((p, idx) =>
+                p === "..." ? (
+                  <span
+                    key={`ellipsis-${idx}`}
+                    style={{
+                      color: "rgba(255,255,255,0.2)",
+                      fontSize: 12,
+                      padding: "0 4px",
+                    }}
+                  >
+                    …
+                  </span>
+                ) : (
+                  <button
+                    key={p}
+                    style={S.pageBtn(p === safePage, false)}
+                    onClick={() => setCurrentPage(p)}
+                  >
+                    {p}
+                  </button>
+                ),
+              )}
+
+              {/* Next */}
+              <button
+                style={S.pageBtn(false, safePage === totalPages)}
+                disabled={safePage === totalPages}
+                onClick={() =>
+                  setCurrentPage((p) => Math.min(totalPages, p + 1))
+                }
+              >
+                ›
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Delete confirm modal ── */}
@@ -419,17 +943,58 @@ export default function TransactionsPage({ transactions, accounts = [], onEdit, 
         <div style={S.overlay}>
           <div style={S.confirmBox}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>⚠</div>
-            <h3 style={{ color: "#F0F4FF", fontWeight: 500, marginBottom: 8, fontSize: 16 }}>
+            <h3
+              style={{
+                color: "#F0F4FF",
+                fontWeight: 500,
+                marginBottom: 8,
+                fontSize: 16,
+              }}
+            >
               Delete this transaction?
             </h3>
-            <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 13, marginBottom: 24, lineHeight: 1.5 }}>
+            <p
+              style={{
+                color: "rgba(255,255,255,0.4)",
+                fontSize: 13,
+                marginBottom: 24,
+                lineHeight: 1.5,
+              }}
+            >
               This action cannot be undone.
             </p>
             <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => setConfirmId(null)} style={{ flex: 1, padding: "10px", borderRadius: 8, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.6)", cursor: "pointer", fontSize: 13, fontFamily: "inherit" }}>
+              <button
+                onClick={() => setConfirmId(null)}
+                style={{
+                  flex: 1,
+                  padding: "10px",
+                  borderRadius: 8,
+                  background: "rgba(255,255,255,0.05)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  color: "rgba(255,255,255,0.6)",
+                  cursor: "pointer",
+                  fontSize: 13,
+                  fontFamily: "inherit",
+                }}
+              >
                 Cancel
               </button>
-              <button onClick={handleConfirmDelete} style={{ flex: 1, padding: "10px", borderRadius: 8, background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", color: "#EF4444", cursor: "pointer", fontSize: 13, fontWeight: 500, fontFamily: "inherit" }}>
+              <button
+                onClick={handleConfirmDelete}
+                style={{
+                  flex: 1,
+                  padding: "10px",
+                  borderRadius: 8,
+                  background: "rgba(239,68,68,0.15)",
+                  border: "1px solid rgba(239,68,68,0.3)",
+                  color: "#EF4444",
+                  cursor: "pointer",
+                  fontSize: 13,
+                  fontWeight: 500,
+                  fontFamily: "inherit",
+                }}
+              >
                 Delete
               </button>
             </div>
@@ -437,7 +1002,49 @@ export default function TransactionsPage({ transactions, accounts = [], onEdit, 
         </div>
       )}
 
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <style>{`
+        /* ── Base (desktop) ── */
+        .txn-page-wrap { padding: 36px 40px; min-height: 100vh; color: #E8EDF5; }
+
+        .col-desktop  { display: table-cell; }
+        .date-full    { display: inline; }
+        .date-short   { display: none; }
+        .mobile-sub-row { display: none; }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── Mobile ── */
+        @media (max-width: 768px) {
+          .txn-page-wrap { padding: 16px 16px; }
+
+          /* Hide desktop-only columns entirely */
+          .col-desktop { display: none !important; }
+
+          /* Show short date, hide long date */
+          .date-full  { display: none; }
+          .date-short { display: inline; }
+
+          /* Show category + account chips below description */
+          .mobile-sub-row {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 4px;
+          }
+
+          /* Tighten up cells */
+          .col-date    td, th { padding: 10px 8px; }
+          .col-amount  td, th { padding: 10px 8px; }
+          .col-actions td, th { padding: 10px 4px; }
+
+          /* Description column gets more room */
+          .col-desc { max-width: 140px; }
+
+          /* Compact action buttons */
+          .col-actions button { padding: 4px 6px; font-size: 13px; }
+        }
+      `}</style>
     </div>
   );
 }
