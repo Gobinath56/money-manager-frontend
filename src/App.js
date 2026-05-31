@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { transactionAPI, accountAPI } from "./services/api";
-import { getToken, setAuthHeader, logout } from "./services/authService";
+import { getToken, logout, setAuthHeader } from "./services/authService";
 import LoginPage from "./components/LoginPage";
 import Sidebar from "./components/Sidebar";
 import BottomNav from "./components/BottomNav";
