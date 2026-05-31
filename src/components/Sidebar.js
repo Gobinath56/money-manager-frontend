@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 
+// ── Place at: src/components/Sidebar.js ──────────────────────────────────────
+
 const NAV = [
   { id: "dashboard", icon: "▦", label: "Dashboard" },
   { id: "transactions", icon: "↕", label: "Transactions" },
@@ -20,7 +22,6 @@ const ACCOUNT_ACCENTS = [
 ];
 
 // ── Confirm delete modal ───────────────────────────────────────────────────
-// Shows a warning if the account has linked transactions (orphan risk).
 function DeleteAccountModal({
   account,
   transactionCount,
@@ -65,8 +66,6 @@ function DeleteAccountModal({
         >
           Delete "{account.name}"?
         </h3>
-
-        {/* Warn if account has transactions */}
         {hasTransactions && (
           <div
             style={{
@@ -86,7 +85,6 @@ function DeleteAccountModal({
             your history but will no longer show an account name.
           </div>
         )}
-
         <p
           style={{
             color: "rgba(255,255,255,0.4)",
@@ -99,7 +97,6 @@ function DeleteAccountModal({
             ? "The account balance will be removed. This cannot be undone."
             : "This account has no transactions. It will be permanently removed."}
         </p>
-
         <div style={{ display: "flex", gap: 10 }}>
           <button
             onClick={onCancel}
@@ -149,7 +146,7 @@ export default function Sidebar({
   setActivePage,
   userEmail,
   accounts = [],
-  transactions = [], // FIX: needed to count linked transactions per account
+  transactions = [],
   onLogout,
   onAddTransaction,
   onCreateAccount,
@@ -158,9 +155,8 @@ export default function Sidebar({
   isOpen,
   onClose,
 }) {
-  const initials = userEmail ? userEmail.slice(0, 2).toUpperCase() : "MM";
+  const initials = userEmail ? userEmail.slice(0, 2).toUpperCase() : "CW";
   const [hoveredDel, setHoveredDel] = useState(null);
-  // FIX: which account is pending deletion (shows confirm modal)
   const [pendingDelete, setPendingDelete] = useState(null);
 
   const netWorth = accounts.reduce((sum, a) => sum + (a.balance || 0), 0);
@@ -170,15 +166,10 @@ export default function Sidebar({
     if (onClose) onClose();
   };
 
-  // FIX: count how many transactions reference this account
   const countLinkedTransactions = (accountId) =>
     transactions.filter((t) => t.accountId === accountId).length;
 
-  const handleDeleteClick = (acc) => {
-    // Open confirm modal instead of deleting immediately
-    setPendingDelete(acc);
-  };
-
+  const handleDeleteClick = (acc) => setPendingDelete(acc);
   const handleConfirmDelete = () => {
     if (!pendingDelete) return;
     onDeleteAccount(pendingDelete.id, pendingDelete.name);
@@ -220,7 +211,7 @@ export default function Sidebar({
     },
     brandName: {
       fontSize: 14,
-      fontWeight: 600,
+      fontWeight: 700,
       color: "#F0F4FF",
       letterSpacing: "-0.3px",
     },
@@ -365,17 +356,6 @@ export default function Sidebar({
       whiteSpace: "nowrap",
       flex: 1,
     },
-    logoutBtn: {
-      width: "100%",
-      padding: "7px 10px",
-      borderRadius: 7,
-      background: "rgba(255,80,80,0.07)",
-      border: "1px solid rgba(255,80,80,0.12)",
-      color: "rgba(255,110,110,0.6)",
-      fontSize: 11,
-      cursor: "pointer",
-      textAlign: "center",
-    },
   };
 
   return (
@@ -396,18 +376,18 @@ export default function Sidebar({
         className={`sidebar-panel ${isOpen ? "sidebar-open" : ""}`}
         style={S.sidebar}
       >
-        {/* Brand */}
+        {/* ── Brand ── */}
         <div style={S.brand}>
           <div style={S.brandRow}>
             <div style={S.brandIcon}>💰</div>
             <div>
-              <div style={S.brandName}>Money Manager</div>
+              <div style={S.brandName}>CoinWise</div>
               <div style={S.brandSub}>Personal Finance</div>
             </div>
           </div>
         </div>
 
-        {/* Add Transaction */}
+        {/* ── Add Transaction ── */}
         <div style={S.addBtnWrap}>
           <button
             style={S.addBtn}
@@ -421,7 +401,7 @@ export default function Sidebar({
           </button>
         </div>
 
-        {/* Nav */}
+        {/* ── Nav ── */}
         <div style={{ flexShrink: 0 }}>
           <div style={S.sectionLabel}>Menu</div>
           {NAV.map((item) => (
@@ -436,7 +416,7 @@ export default function Sidebar({
           ))}
         </div>
 
-        {/* Accounts */}
+        {/* ── Accounts ── */}
         <div style={S.accountsSection}>
           <div style={S.accountsHeader}>
             <span style={S.accountsLabel}>Accounts</span>
@@ -480,7 +460,6 @@ export default function Sidebar({
                     <span style={S.accBalance(accent)}>
                       ₹{(acc.balance || 0).toFixed(0)}
                     </span>
-                    {/* FIX: clicking × opens confirm modal instead of deleting immediately */}
                     <button
                       style={S.accDelBtn(hoveredDel === acc.id)}
                       onMouseEnter={() => setHoveredDel(acc.id)}
@@ -516,19 +495,34 @@ export default function Sidebar({
 
         <div style={{ flex: 1 }} />
 
-        {/* Footer */}
+        {/* ── Footer ── */}
         <div style={S.footer}>
           <div style={S.userRow}>
             <div style={S.avatar}>{initials}</div>
             <span style={S.userEmail}>{userEmail}</span>
           </div>
-          <button style={S.logoutBtn} onClick={onLogout}>
-            Sign out
+          {/* Settings link instead of inline sign out button */}
+          <button
+            style={{
+              width: "100%",
+              padding: "7px 10px",
+              borderRadius: 7,
+              background: "rgba(99,179,255,0.07)",
+              border: "1px solid rgba(99,179,255,0.12)",
+              color: "rgba(99,179,255,0.6)",
+              fontSize: 11,
+              cursor: "pointer",
+              textAlign: "center",
+              fontFamily: "inherit",
+            }}
+            onClick={() => handleNav("settings")}
+          >
+            ⚙ Settings & Sign out
           </button>
         </div>
       </div>
 
-      {/* FIX: Delete account confirmation modal */}
+      {/* Delete confirmation modal */}
       {pendingDelete && (
         <DeleteAccountModal
           account={pendingDelete}
@@ -539,14 +533,9 @@ export default function Sidebar({
       )}
 
       <style>{`
-        @media (min-width: 769px) {
-          .sidebar-panel { transform: translateX(0) !important; }
-        }
+        @media (min-width: 769px) { .sidebar-panel { transform: translateX(0) !important; } }
         @media (max-width: 768px) {
-          .sidebar-panel {
-            transform: translateX(-100%);
-            box-shadow: 4px 0 24px rgba(0,0,0,0.4);
-          }
+          .sidebar-panel { transform: translateX(-100%); box-shadow: 4px 0 24px rgba(0,0,0,0.4); }
           .sidebar-panel.sidebar-open { transform: translateX(0); }
         }
       `}</style>

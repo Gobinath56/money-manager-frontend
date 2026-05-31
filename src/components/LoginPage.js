@@ -3,6 +3,8 @@ import { login, register } from "../services/authService";
 import { authAPI } from "../services/api";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 
+// ── Place at: src/components/LoginPage.js ────────────────────────────────────
+
 const FEATURES = [
   {
     icon: "📊",
@@ -26,8 +28,6 @@ const FEATURES = [
   },
 ];
 
-// ── Slow backend warning messages — shown after N seconds of waiting ────────
-// Render free tier cold starts take 30-60s. These messages reassure the user.
 const SLOW_MESSAGES = [
   { after: 4, text: "Connecting to server…" },
   { after: 10, text: "Server is waking up, please wait…" },
@@ -129,7 +129,7 @@ function PasswordStrength({ password }) {
   ];
   const score = checks.filter((c) => c.pass).length;
   const colors = ["#EF4444", "#F59E0B", "#10B981"];
-  const strengthLabels = ["Weak", "Medium", "Strong"];
+  const labels = ["Weak", "Medium", "Strong"];
   if (!password) return null;
 
   return (
@@ -165,7 +165,7 @@ function PasswordStrength({ password }) {
             color: score > 0 ? colors[score - 1] : "rgba(255,255,255,0.2)",
           }}
         >
-          {score > 0 ? strengthLabels[score - 1] : ""}
+          {score > 0 ? labels[score - 1] : ""}
         </span>
       </div>
       <div style={{ display: "flex", gap: 12 }}>
@@ -258,15 +258,11 @@ function OtpInput({ value, onChange }) {
   );
 }
 
-// ── Slow-server warning banner ──────────────────────────────────────────────
-// Shown when loading takes longer than expected.
-// Cycles through SLOW_MESSAGES based on elapsed seconds.
 function SlowServerBanner({ elapsedSeconds }) {
   const msg = [...SLOW_MESSAGES]
     .reverse()
     .find((m) => elapsedSeconds >= m.after);
   if (!msg) return null;
-
   return (
     <div
       style={{
@@ -284,7 +280,6 @@ function SlowServerBanner({ elapsedSeconds }) {
         animation: "fadeIn 0.4s ease",
       }}
     >
-      {/* Spinning indicator */}
       <span
         style={{
           width: 12,
@@ -304,20 +299,14 @@ function SlowServerBanner({ elapsedSeconds }) {
 
 export default function LoginPage({ onSuccess }) {
   const [screen, setScreen] = useState("login");
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [mounted, setMounted] = useState(false);
-
-  // FIX #3: track how long the request has been loading
-  // so we can show reassuring messages during Render cold starts
   const [loadingSeconds, setLoadingSeconds] = useState(0);
   const loadingTimerRef = useRef(null);
-
   const [forgotEmail, setForgotEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -329,20 +318,18 @@ export default function LoginPage({ onSuccess }) {
     const t = setTimeout(() => setMounted(true), 50);
     return () => clearTimeout(t);
   }, []);
-
   useEffect(() => {
     if (resendTimer <= 0) return;
     const t = setInterval(() => setResendTimer((p) => p - 1), 1000);
     return () => clearInterval(t);
   }, [resendTimer]);
-
-  // FIX #3: start/stop the elapsed-seconds timer with loading state
   useEffect(() => {
     if (loading) {
       setLoadingSeconds(0);
-      loadingTimerRef.current = setInterval(() => {
-        setLoadingSeconds((s) => s + 1);
-      }, 1000);
+      loadingTimerRef.current = setInterval(
+        () => setLoadingSeconds((s) => s + 1),
+        1000,
+      );
     } else {
       clearInterval(loadingTimerRef.current);
       setLoadingSeconds(0);
@@ -358,7 +345,6 @@ export default function LoginPage({ onSuccess }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
       setError("Please enter your email");
@@ -425,12 +411,8 @@ export default function LoginPage({ onSuccess }) {
   const handleResendOtp = async () => {
     if (resendTimer > 0) return;
     const trimmedEmail = forgotEmail.trim();
-    if (!trimmedEmail) {
-      setError("Please enter your email");
-      return;
-    }
-    if (!isValidEmail(trimmedEmail)) {
-      setError("Please enter a valid email address");
+    if (!trimmedEmail || !isValidEmail(trimmedEmail)) {
+      setError("Please enter a valid email");
       return;
     }
     clearErrors();
@@ -466,7 +448,6 @@ export default function LoginPage({ onSuccess }) {
       setError("Passwords do not match");
       return;
     }
-
     setLoading(true);
     try {
       await authAPI.resetPassword(forgotEmail.trim(), otp, newPassword);
@@ -612,6 +593,7 @@ export default function LoginPage({ onSuccess }) {
         />
 
         <div>
+          {/* ── CoinWise brand ── */}
           <div
             style={{
               display: "flex",
@@ -639,12 +621,12 @@ export default function LoginPage({ onSuccess }) {
               <div
                 style={{
                   fontSize: 17,
-                  fontWeight: 600,
+                  fontWeight: 700,
                   color: "#F0F4FF",
                   letterSpacing: "-0.3px",
                 }}
               >
-                Money Manager
+                CoinWise
               </div>
               <div
                 style={{
@@ -740,7 +722,7 @@ export default function LoginPage({ onSuccess }) {
             marginTop: 48,
           }}
         >
-          © 2025 Money Manager · Secure & Private
+          © 2025 CoinWise · Secure & Private
         </div>
       </div>
 
@@ -763,7 +745,7 @@ export default function LoginPage({ onSuccess }) {
             transition: "opacity 0.4s ease, transform 0.4s ease",
           }}
         >
-          {/* ── FORGOT PASSWORD screen ── */}
+          {/* FORGOT PASSWORD */}
           {screen === "forgot" && (
             <>
               <button
@@ -795,17 +777,13 @@ export default function LoginPage({ onSuccess }) {
               >
                 Enter your email and we'll send a 6-digit OTP
               </p>
-
               {error && (
                 <div style={S.errorBox}>
                   <span style={{ color: "#EF4444", flexShrink: 0 }}>✕</span>
                   {error}
                 </div>
               )}
-
-              {/* FIX #3: slow server banner on forgot password too */}
               <SlowServerBanner elapsedSeconds={loadingSeconds} />
-
               <form onSubmit={handleForgotSubmit}>
                 <Field
                   label="Email address"
@@ -831,7 +809,7 @@ export default function LoginPage({ onSuccess }) {
             </>
           )}
 
-          {/* ── OTP screen ── */}
+          {/* OTP */}
           {screen === "otp" && (
             <>
               <button
@@ -874,7 +852,6 @@ export default function LoginPage({ onSuccess }) {
               >
                 {forgotEmail}
               </p>
-
               {error && (
                 <div style={S.errorBox}>
                   <span style={{ color: "#EF4444", flexShrink: 0 }}>✕</span>
@@ -887,7 +864,6 @@ export default function LoginPage({ onSuccess }) {
                   {otpSuccess}
                 </div>
               )}
-
               <form onSubmit={handleResetSubmit}>
                 <div style={{ marginBottom: 8 }}>
                   <label
@@ -905,7 +881,6 @@ export default function LoginPage({ onSuccess }) {
                   </label>
                   <OtpInput value={otp} onChange={setOtp} />
                 </div>
-
                 <div style={{ textAlign: "center", marginBottom: 24 }}>
                   {resendTimer > 0 ? (
                     <span
@@ -931,7 +906,6 @@ export default function LoginPage({ onSuccess }) {
                     </button>
                   )}
                 </div>
-
                 <Field
                   label="New Password"
                   type="password"
@@ -948,7 +922,6 @@ export default function LoginPage({ onSuccess }) {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="••••••••"
                 />
-
                 {confirmPassword && (
                   <div
                     style={{
@@ -964,7 +937,6 @@ export default function LoginPage({ onSuccess }) {
                       : "✕ Passwords do not match"}
                   </div>
                 )}
-
                 <button
                   type="submit"
                   style={S.submitBtn(loading || otp.length < 6)}
@@ -982,7 +954,7 @@ export default function LoginPage({ onSuccess }) {
             </>
           )}
 
-          {/* ── LOGIN / REGISTER screen ── */}
+          {/* LOGIN / REGISTER */}
           {(screen === "login" || screen === "register") && (
             <>
               <h1
@@ -1004,7 +976,7 @@ export default function LoginPage({ onSuccess }) {
                 }}
               >
                 {isLogin
-                  ? "Sign in to access your dashboard"
+                  ? "Sign in to access your CoinWise dashboard"
                   : "Start tracking your finances today"}
               </p>
 
@@ -1084,7 +1056,7 @@ export default function LoginPage({ onSuccess }) {
                       marginTop: 6,
                     }}
                   >
-                    Loading your dashboard…
+                    Loading your CoinWise dashboard…
                   </p>
                 </div>
               ) : (
@@ -1103,10 +1075,7 @@ export default function LoginPage({ onSuccess }) {
                       {error}
                     </div>
                   )}
-
-                  {/* FIX #3: show slow-server warning during login/register */}
                   <SlowServerBanner elapsedSeconds={loadingSeconds} />
-
                   <form onSubmit={handleSubmit}>
                     <Field
                       label="Email address"
@@ -1123,9 +1092,7 @@ export default function LoginPage({ onSuccess }) {
                       placeholder="••••••••"
                       hint={!isLogin ? "min. 6 characters" : ""}
                     />
-
                     {!isLogin && <PasswordStrength password={password} />}
-
                     {isLogin && (
                       <div
                         style={{
@@ -1154,7 +1121,6 @@ export default function LoginPage({ onSuccess }) {
                         </button>
                       </div>
                     )}
-
                     <button
                       type="submit"
                       disabled={loading}
@@ -1170,7 +1136,6 @@ export default function LoginPage({ onSuccess }) {
                         "Create account →"
                       )}
                     </button>
-
                     <div
                       style={{
                         display: "flex",
@@ -1199,7 +1164,6 @@ export default function LoginPage({ onSuccess }) {
                         }}
                       />
                     </div>
-
                     <p
                       style={{
                         textAlign: "center",
@@ -1238,8 +1202,8 @@ export default function LoginPage({ onSuccess }) {
       </div>
 
       <style>{`
-        @keyframes spin    { to { transform: rotate(360deg); } }
-        @keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes spin   { to { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         input::placeholder { color: rgba(255,255,255,0.2); }
       `}</style>
     </div>

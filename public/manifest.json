@@ -1,0 +1,28 @@
+{
+  "short_name": "CoinWise",
+  "name": "CoinWise - Personal Finance",
+  "description": "Track income, expenses, budgets and accounts in one intelligent dashboard.",
+  "icons": [
+    {
+      "src": "logo192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "logo512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#1E6FD9",
+  "background_color": "#080C14",
+  "scope": "/",
+  "categories": ["finance", "productivity"],
+  "lang": "en-IN",
+  "dir": "ltr"
+}

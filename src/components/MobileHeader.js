@@ -1,9 +1,6 @@
 import React from "react";
 
-// ── Mobile top header ──────────────────────────────────────────────────────
-// Shown only on mobile (< 769px).
-// Contains: hamburger menu → opens sidebar drawer, page title, add button.
-// Desktop header is handled inside each page component itself.
+// ── Place at: src/components/MobileHeader.js ─────────────────────────────────
 
 const PAGE_TITLES = {
   dashboard: "Dashboard",
@@ -11,15 +8,19 @@ const PAGE_TITLES = {
   analytics: "Analytics",
   budget: "Budget Goals",
   recurring: "Recurring",
-  categories: "Categories", // was missing
+  categories: "Categories",
   settings: "Settings",
 };
 
-export default function MobileHeader({ activePage, onOpenSidebar, onAddTransaction }) {
+export default function MobileHeader({
+  activePage,
+  onOpenSidebar,
+  onAddTransaction,
+}) {
   return (
     <>
       <div className="mobile-header">
-        {/* Hamburger — opens the sidebar drawer */}
+        {/* Hamburger */}
         <button
           className="mobile-header-btn"
           onClick={onOpenSidebar}
@@ -30,13 +31,13 @@ export default function MobileHeader({ activePage, onOpenSidebar, onAddTransacti
           <div className="hamburger-line" />
         </button>
 
-        {/* Page title */}
+        {/* Page title — shows CoinWise logo + page name */}
         <div className="mobile-header-title">
           <span style={{ marginRight: 6 }}>💰</span>
-          {PAGE_TITLES[activePage] || "Money Manager"}
+          {PAGE_TITLES[activePage] || "CoinWise"}
         </div>
 
-        {/* Quick add button */}
+        {/* Quick add */}
         <button
           className="mobile-header-btn"
           onClick={onAddTransaction}
@@ -48,9 +49,7 @@ export default function MobileHeader({ activePage, onOpenSidebar, onAddTransacti
       </div>
 
       <style>{`
-        .mobile-header {
-          display: none;
-        }
+        .mobile-header { display: none; }
 
         @media (max-width: 768px) {
           .mobile-header {
@@ -66,30 +65,21 @@ export default function MobileHeader({ activePage, onOpenSidebar, onAddTransacti
             z-index: 150;
             font-family: 'DM Sans', 'Segoe UI', sans-serif;
           }
-
           .mobile-header-title {
             font-size: 15px;
-            font-weight: 500;
+            font-weight: 600;
             color: #F0F4FF;
             letter-spacing: -0.2px;
           }
-
           .mobile-header-btn {
-            background: none;
-            border: none;
-            cursor: pointer;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 4px;
-            padding: 8px;
+            background: none; border: none; cursor: pointer;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            gap: 4px; padding: 8px;
             color: rgba(255,255,255,0.6);
           }
-
           .hamburger-line {
-            width: 20px;
-            height: 2px;
+            width: 20px; height: 2px;
             background: rgba(255,255,255,0.6);
             border-radius: 2px;
           }

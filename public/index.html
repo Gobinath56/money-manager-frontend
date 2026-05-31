@@ -1,18 +1,67 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#3b82f6" />
+
+    <!-- ── PWA Core ── -->
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    <meta name="theme-color" content="#1E6FD9" />
+
+    <!-- ── Viewport ── -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+
+    <!-- ── SEO / Description ── -->
     <meta
       name="description"
-      content="Money Manager - Track your income and expenses effortlessly"
+      content="CoinWise — Track income, expenses, budgets and accounts in one intelligent dashboard."
     />
-    <title>Money Manager - Personal Finance Tracker</title>
+    <meta
+      name="keywords"
+      content="finance, budget, expense tracker, income, money management"
+    />
+    <meta name="author" content="CoinWise" />
+
+    <!-- ── iOS PWA support ── -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta name="apple-mobile-web-app-title" content="CoinWise" />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+
+    <!-- ── Android / Chrome ── -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="application-name" content="CoinWise" />
+
+    <!-- ── Open Graph (share previews) ── -->
+    <meta property="og:title" content="CoinWise — Personal Finance" />
+    <meta
+      property="og:description"
+      content="Track income, expenses, budgets and accounts in one intelligent dashboard."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="%PUBLIC_URL%/logo512.png" />
+
+    <!-- ── Favicon ── -->
+    <link rel="icon" href="%PUBLIC_URL%/logo192.png" type="image/png" />
+    <link
+      rel="shortcut icon"
+      href="%PUBLIC_URL%/logo192.png"
+      type="image/png"
+    />
+
+    <!-- ── Splash screen background matches app ── -->
+    <meta name="msapplication-TileColor" content="#080C14" />
+    <meta name="msapplication-TileImage" content="%PUBLIC_URL%/logo192.png" />
+
+    <title>CoinWise — Personal Finance</title>
   </head>
   <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <noscript>You need to enable JavaScript to run CoinWise.</noscript>
     <div id="root"></div>
   </body>
 </html>

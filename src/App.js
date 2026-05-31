@@ -15,6 +15,7 @@ import AccountTransferModal from "./components/AccountTransferModal";
 import Toast from "./components/Toast";
 import CategoriesPage from "./components/CategoriesPage";
 import ChangePasswordPage from "./components/ChangePasswordPage";
+import InstallPrompt from "./components/InstallPrompt";
 import { startKeepAlive, stopKeepAlive } from "./services/keepAlive";
 
 function getEmailFromToken(token) {
@@ -78,7 +79,7 @@ export default function App() {
     const token = getToken();
     if (token) {
       setAuthHeader(token);
-      startKeepAlive(); // FIX #4: resume keep-alive if user was already logged in
+      startKeepAlive();
     }
   }, []);
 
@@ -121,11 +122,11 @@ export default function App() {
   const handleLoginSuccess = (token, email) => {
     setIsAuthenticated(true);
     setUserEmail(email);
-    startKeepAlive(); // FIX #4: keep Render server warm after login
+    startKeepAlive();
   };
 
   const handleLogout = () => {
-    stopKeepAlive(); // FIX #4: stop pinging when user logs out
+    stopKeepAlive();
     logout();
     setIsAuthenticated(false);
     setUserEmail(null);
@@ -205,7 +206,6 @@ export default function App() {
       await accountAPI.deleteAccount(id);
       showToast(`Account "${name}" deleted`);
       fetchAccounts();
-      // Refresh transactions so orphaned ones update their display
       fetchDashboardData();
     } catch (err) {
       if (err.response?.status === 401) handleLogout();
@@ -262,7 +262,12 @@ export default function App() {
       case "categories":
         return <CategoriesPage showToast={showToast} />;
       case "settings":
-        return <ChangePasswordPage showToast={showToast} />;
+        return (
+          <ChangePasswordPage
+            showToast={showToast}
+            onLogout={handleLogout} // ← passed so Settings page can sign out
+          />
+        );
       default:
         return <DashboardPage {...sharedProps} />;
     }
@@ -282,7 +287,7 @@ export default function App() {
         setActivePage={setActivePage}
         userEmail={userEmail}
         accounts={accounts}
-        transactions={transactions} // FIX: passed so Sidebar can count linked transactions
+        transactions={transactions}
         onLogout={handleLogout}
         onAddTransaction={openAddTransaction}
         onCreateAccount={() => setIsCreateAccountModalOpen(true)}
@@ -333,6 +338,9 @@ export default function App() {
           onSubmit={handleCreateAccount}
         />
       )}
+
+      {/* ── PWA Install Prompt ── */}
+      <InstallPrompt />
 
       {toast && (
         <Toast

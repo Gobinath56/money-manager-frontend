@@ -1,6 +1,11 @@
 import React, { useState } from "react";
 import { authAPI } from "../services/api";
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  Settings Page  —  Change Password + Sign Out
+//  Place at: src/components/ChangePasswordPage.js
+// ─────────────────────────────────────────────────────────────────────────────
+
 function Field({ label, value, onChange, placeholder, hint }) {
   const [focused, setFocused] = useState(false);
   const [show, setShow] = useState(false);
@@ -46,7 +51,9 @@ function Field({ label, value, onChange, placeholder, hint }) {
             background: focused
               ? "rgba(99,179,255,0.06)"
               : "rgba(255,255,255,0.04)",
-            border: `1px solid ${focused ? "rgba(99,179,255,0.4)" : "rgba(255,255,255,0.1)"}`,
+            border: `1px solid ${
+              focused ? "rgba(99,179,255,0.4)" : "rgba(255,255,255,0.1)"
+            }`,
             borderRadius: 10,
             padding: "12px 42px 12px 14px",
             color: "#F0F4FF",
@@ -145,12 +152,118 @@ function PasswordStrength({ password }) {
   );
 }
 
-export default function ChangePasswordPage({ showToast }) {
+// ── Sign Out Confirmation Modal ───────────────────────────────────────────────
+function SignOutModal({ onConfirm, onCancel }) {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.7)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 500,
+        padding: "0 16px",
+        fontFamily: "'DM Sans', sans-serif",
+      }}
+    >
+      <div
+        style={{
+          background: "#0D1117",
+          border: "1px solid rgba(255,80,80,0.2)",
+          borderRadius: 16,
+          padding: "28px 28px",
+          width: "100%",
+          maxWidth: 360,
+          textAlign: "center",
+        }}
+      >
+        <div style={{ fontSize: 36, marginBottom: 14 }}>👋</div>
+        <h3
+          style={{
+            color: "#F0F4FF",
+            fontWeight: 600,
+            fontSize: 17,
+            marginBottom: 10,
+          }}
+        >
+          Sign out of CoinWise?
+        </h3>
+        <p
+          style={{
+            color: "rgba(255,255,255,0.4)",
+            fontSize: 13,
+            marginBottom: 24,
+            lineHeight: 1.6,
+          }}
+        >
+          Your data is safely stored. You can sign back in anytime.
+        </p>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button
+            onClick={onCancel}
+            style={{
+              flex: 1,
+              padding: "11px",
+              borderRadius: 9,
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              color: "rgba(255,255,255,0.6)",
+              cursor: "pointer",
+              fontSize: 13,
+              fontFamily: "inherit",
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            style={{
+              flex: 1,
+              padding: "11px",
+              borderRadius: 9,
+              background: "rgba(255,80,80,0.15)",
+              border: "1px solid rgba(255,80,80,0.3)",
+              color: "#FF6B6B",
+              cursor: "pointer",
+              fontSize: 13,
+              fontWeight: 600,
+              fontFamily: "inherit",
+            }}
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Settings Page ────────────────────────────────────────────────────────
+export default function ChangePasswordPage({ showToast, onLogout }) {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showSignOutModal, setShowSignOutModal] = useState(false);
+
+  const cardStyle = {
+    background: "#0D1117",
+    border: "1px solid rgba(255,255,255,0.07)",
+    borderRadius: 16,
+    padding: "28px 32px",
+  };
+
+  const cardHeaderStyle = {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 24,
+    paddingBottom: 20,
+    borderBottom: "1px solid rgba(255,255,255,0.06)",
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -201,7 +314,7 @@ export default function ChangePasswordPage({ showToast }) {
         maxWidth: 560,
       }}
     >
-      {/* Header */}
+      {/* ── Page header ── */}
       <h1
         style={{
           fontSize: 26,
@@ -220,28 +333,14 @@ export default function ChangePasswordPage({ showToast }) {
           marginBottom: 32,
         }}
       >
-        Manage your account security
+        Manage your account security and preferences
       </p>
 
-      {/* Card */}
-      <div
-        style={{
-          background: "#0D1117",
-          border: "1px solid rgba(255,255,255,0.07)",
-          borderRadius: 16,
-          padding: "28px 32px",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-            marginBottom: 24,
-            paddingBottom: 20,
-            borderBottom: "1px solid rgba(255,255,255,0.06)",
-          }}
-        >
+      {/* ══════════════════════════════════
+          CARD 1 — Change Password
+      ══════════════════════════════════ */}
+      <div style={{ ...cardStyle, marginBottom: 20 }}>
+        <div style={cardHeaderStyle}>
           <div
             style={{
               width: 40,
@@ -310,7 +409,6 @@ export default function ChangePasswordPage({ showToast }) {
             hint="min. 6 characters"
           />
           <PasswordStrength password={newPassword} />
-
           <Field
             label="Confirm New Password"
             value={confirmPassword}
@@ -318,7 +416,6 @@ export default function ChangePasswordPage({ showToast }) {
             placeholder="Confirm new password"
           />
 
-          {/* Match indicator */}
           {confirmPassword && (
             <div
               style={{
@@ -355,6 +452,7 @@ export default function ChangePasswordPage({ showToast }) {
               alignItems: "center",
               justifyContent: "center",
               gap: 8,
+              fontFamily: "inherit",
             }}
           >
             {loading ? (
@@ -378,6 +476,97 @@ export default function ChangePasswordPage({ showToast }) {
           </button>
         </form>
       </div>
+
+      {/* ══════════════════════════════════
+          CARD 2 — Sign Out
+      ══════════════════════════════════ */}
+      <div style={cardStyle}>
+        <div style={cardHeaderStyle}>
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 10,
+              background: "rgba(255,80,80,0.1)",
+              border: "1px solid rgba(255,80,80,0.15)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 18,
+            }}
+          >
+            🚪
+          </div>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: "#F0F4FF" }}>
+              Sign Out
+            </div>
+            <div
+              style={{
+                fontSize: 12,
+                color: "rgba(255,255,255,0.35)",
+                marginTop: 2,
+              }}
+            >
+              Sign out of your CoinWise account
+            </div>
+          </div>
+        </div>
+
+        <p
+          style={{
+            fontSize: 13,
+            color: "rgba(255,255,255,0.35)",
+            lineHeight: 1.6,
+            marginBottom: 20,
+          }}
+        >
+          Your financial data is safely stored in the cloud. You can sign back
+          in anytime to access your dashboard.
+        </p>
+
+        <button
+          onClick={() => setShowSignOutModal(true)}
+          style={{
+            width: "100%",
+            padding: "13px",
+            background: "rgba(255,80,80,0.08)",
+            border: "1px solid rgba(255,80,80,0.2)",
+            borderRadius: 10,
+            color: "#FF6B6B",
+            fontSize: 14,
+            fontWeight: 500,
+            cursor: "pointer",
+            transition: "all 0.2s",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            fontFamily: "inherit",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "rgba(255,80,80,0.14)";
+            e.currentTarget.style.borderColor = "rgba(255,80,80,0.35)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "rgba(255,80,80,0.08)";
+            e.currentTarget.style.borderColor = "rgba(255,80,80,0.2)";
+          }}
+        >
+          🚪 Sign out of CoinWise
+        </button>
+      </div>
+
+      {/* Sign Out confirmation modal */}
+      {showSignOutModal && (
+        <SignOutModal
+          onConfirm={() => {
+            setShowSignOutModal(false);
+            onLogout();
+          }}
+          onCancel={() => setShowSignOutModal(false)}
+        />
+      )}
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
