@@ -324,5 +324,39 @@ export const authAPI = {
   changePassword: (currentPassword, newPassword) =>
     api.post("/auth/change-password", { currentPassword, newPassword }),
 };
+// ADD this block to src/services/api.js
+// Place it after the categoryAPI block and before `export default api`
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  BUDGET API
+//  FIX #18 — Budget limits now synced to MongoDB via the backend.
+//  Previously everything was localStorage-only.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const budgetAPI = {
+  /** All budgets for the current user */
+  getAll: () => api.get("/budgets"),
+
+  /**
+   * Create or update a budget limit.
+   * Uses PUT because the operation is an upsert — safe to call multiple times.
+   *
+   * @param {string} categoryName  - e.g. "FOOD", "FUEL"
+   * @param {number} limitAmount   - spending limit in rupees
+   * @param {string} resetType     - "MONTHLY" | "FIXED"
+   */
+  upsert: (categoryName, limitAmount, resetType) =>
+    api.put("/budgets", { categoryName, limitAmount, resetType }),
+
+  /** Delete budget by document ID */
+  delete: (id) => api.delete(`/budgets/${id}`),
+
+  /**
+   * Delete by category name — avoids a round-trip GET just to find the ID.
+   * The BudgetCard only knows the category name, not the MongoDB _id.
+   */
+  deleteByCategory: (categoryName) =>
+    api.delete(`/budgets/category/${categoryName}`),
+};
 
 export default api;

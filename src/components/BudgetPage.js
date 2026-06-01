@@ -1,19 +1,21 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { categoryAPI } from "../services/api";
+import { categoryAPI, budgetAPI } from "../services/api";
 import { formatCurrency } from "../utils/helpers";
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  BudgetPage  —  rewritten
+//  BudgetPage  —  FIX #18
 //
-//  Bug fixes vs previous version:
-//    1. BudgetCard no longer calls loadBudget() on every render.
-//       limit/fixed now live in useState with lazy initialisers.
-//    2. key={`${cat.id}-${tick}`} forces a full remount after every
-//       save/clear, so stale closure values can never survive.
-//    3. handleSave / handleClear update local state immediately so the
-//       progress bar refreshes within the same render cycle.
-//    4. handleOpen no longer re-reads localStorage — state is already fresh.
-//    5. summary useMemo still depends on tick (for the parent strip).
+//  WHAT CHANGED vs the old version:
+//    - Budget limits are now stored in MongoDB via /api/budgets (not localStorage).
+//    - They sync across all devices: set on your laptop, visible on your phone.
+//    - The BudgetCard no longer reads/writes localStorage at all.
+//    - Server returns the user's budgets as a list; we build a Map for O(1) lookup.
+//    - handleSave  → PUT  /api/budgets   (upsert)
+//    - handleClear → DELETE /api/budgets/category/:name
+//
+//  WHAT STAYED THE SAME:
+//    - All UI, progress bars, status badges, period selector — unchanged.
+//    - BudgetCard prop interface is the same; only the data source changed.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const CAT_ICONS = {
@@ -49,31 +51,7 @@ const CAT_COLORS = [
   "#84CC16",
 ];
 
-// ── localStorage helpers ──────────────────────────────────────────────────
-function monthKey() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-function storageKey(catName, fixed) {
-  return fixed
-    ? `mm_budget_fixed_${catName}`
-    : `mm_budget_${monthKey()}_${catName}`;
-}
-function loadBudget(catName) {
-  const fixed = localStorage.getItem(storageKey(catName, true));
-  const monthly = localStorage.getItem(storageKey(catName, false));
-  if (fixed) return { limit: parseFloat(fixed), fixed: true };
-  if (monthly) return { limit: parseFloat(monthly), fixed: false };
-  return { limit: 0, fixed: false };
-}
-function saveBudget(catName, limit, fixed) {
-  localStorage.removeItem(storageKey(catName, true));
-  localStorage.removeItem(storageKey(catName, false));
-  if (limit > 0)
-    localStorage.setItem(storageKey(catName, fixed), String(limit));
-}
-
-// ── Animated progress bar ────────────────────────────────────────────────
+// ── Animated progress bar (unchanged) ────────────────────────────────────
 function ProgressBar({ pct, color }) {
   const clamped = Math.min(pct, 100);
   const fill = pct >= 100 ? "#EF4444" : pct >= 80 ? "#F59E0B" : color;
@@ -102,25 +80,25 @@ function ProgressBar({ pct, color }) {
 
 // ── Single budget card ────────────────────────────────────────────────────
 //
-//  KEY CHANGE: limit and fixed are initialised from localStorage ONCE on
-//  mount (lazy useState), not re-read on every render. The parent passes
-//  key={`${cat.id}-${tick}`} so this component fully remounts after every
-//  save/clear — the initialiser always sees fresh data.
+//  Props:
+//    cat        — category name string (e.g. "FOOD")
+//    color      — accent hex color
+//    icon       — emoji icon
+//    spending   — how much was spent this period (from dashboardData)
+//    budget     — { id, limitAmount, resetType } | null  (from API)
+//    onSave     — async (categoryName, limitAmount, resetType) => void
+//    onClear    — async (categoryName) => void
 //
-function BudgetCard({ cat, color, icon, spending, onSave, onClear }) {
+function BudgetCard({ cat, color, icon, spending, budget, onSave, onClear }) {
   const [open, setOpen] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [inputVal, setInputVal] = useState("");
+  const [isFixed, setIsFixed] = useState(false);
 
-  // ── Read localStorage once on mount ──────────────────────────────────
-  const [limit, setLimit] = useState(() => loadBudget(cat).limit);
-  const [fixed, setFixed] = useState(() => loadBudget(cat).fixed);
-
-  // Editor fields seed from live state values
-  const [inputVal, setInputVal] = useState(() => {
-    const b = loadBudget(cat);
-    return b.limit > 0 ? String(b.limit) : "";
-  });
-  const [isFixed, setIsFixed] = useState(() => loadBudget(cat).fixed);
+  const limit = budget?.limitAmount ?? 0;
+  const fixed = budget?.resetType === "FIXED";
 
   const spend = spending || 0;
   const pct = limit > 0 ? Math.round((spend / limit) * 100) : 0;
@@ -133,7 +111,6 @@ function BudgetCard({ cat, color, icon, spending, onSave, onClear }) {
       : pct >= 80
         ? "warn"
         : "ok";
-
   const statusLabel = {
     none: "No limit",
     over: "Over limit",
@@ -153,7 +130,6 @@ function BudgetCard({ cat, color, icon, spending, onSave, onClear }) {
     ok: "rgba(16,185,129,0.1)",
   }[status];
 
-  // Toggle editor — seed inputVal from current state (not localStorage)
   function handleOpen() {
     if (!open) {
       setInputVal(limit > 0 ? String(limit) : "");
@@ -162,29 +138,30 @@ function BudgetCard({ cat, color, icon, spending, onSave, onClear }) {
     setOpen((o) => !o);
   }
 
-  // Save — update local state immediately so progress bar refreshes now,
-  // then notify parent to bump tick (which remounts this card for a clean slate)
-  function handleSave() {
+  async function handleSave() {
     const val = parseFloat(inputVal);
     if (!val || val <= 0) return;
-    saveBudget(cat, val, isFixed);
-    setLimit(val);
-    setFixed(isFixed);
-    setSaved(true);
-    setTimeout(() => {
-      setSaved(false);
-      setOpen(false);
-      onSave();
-    }, 800);
+    setSaving(true);
+    try {
+      await onSave(cat, val, isFixed ? "FIXED" : "MONTHLY");
+      setSaved(true);
+      setTimeout(() => {
+        setSaved(false);
+        setOpen(false);
+      }, 800);
+    } finally {
+      setSaving(false);
+    }
   }
 
-  // Clear — update local state immediately, then notify parent
-  function handleClear() {
-    saveBudget(cat, 0, false);
-    setLimit(0);
-    setFixed(false);
-    setOpen(false);
-    onClear();
+  async function handleClear() {
+    setClearing(true);
+    try {
+      await onClear(cat);
+      setOpen(false);
+    } finally {
+      setClearing(false);
+    }
   }
 
   const displayName = cat.charAt(0) + cat.slice(1).toLowerCase();
@@ -201,7 +178,7 @@ function BudgetCard({ cat, color, icon, spending, onSave, onClear }) {
         boxShadow: open ? "0 0 0 1px rgba(255,255,255,0.04)" : "none",
       }}
     >
-      {/* ── Top row ── */}
+      {/* Top row */}
       <div
         style={{
           display: "flex",
@@ -226,7 +203,6 @@ function BudgetCard({ cat, color, icon, spending, onSave, onClear }) {
         >
           {icon}
         </div>
-
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 500, color: "#F0F4FF" }}>
             {displayName}
@@ -243,7 +219,6 @@ function BudgetCard({ cat, color, icon, spending, onSave, onClear }) {
             </div>
           )}
         </div>
-
         <span
           style={{
             fontSize: 10,
@@ -260,11 +235,10 @@ function BudgetCard({ cat, color, icon, spending, onSave, onClear }) {
         </span>
       </div>
 
-      {/* ── Progress section ── */}
+      {/* Progress section */}
       {limit > 0 ? (
         <>
           <ProgressBar pct={pct} color={color} />
-
           <div
             style={{
               display: "flex",
@@ -286,7 +260,6 @@ function BudgetCard({ cat, color, icon, spending, onSave, onClear }) {
                 : `${formatCurrency(Math.abs(rem))} over`}
             </span>
           </div>
-
           <div
             style={{
               display: "flex",
@@ -298,7 +271,6 @@ function BudgetCard({ cat, color, icon, spending, onSave, onClear }) {
             <span style={{ fontSize: 11, color: "rgba(255,255,255,0.22)" }}>
               {pct}% of {formatCurrency(limit)}
             </span>
-            {/* Mini segmented progress indicator */}
             <div style={{ display: "flex", gap: 2 }}>
               {[25, 50, 75, 100].map((mark) => (
                 <div
@@ -309,7 +281,6 @@ function BudgetCard({ cat, color, icon, spending, onSave, onClear }) {
                     borderRadius: 2,
                     background: pct >= mark ? color : "rgba(255,255,255,0.08)",
                     transition: "background 0.4s",
-                    opacity: pct >= 100 && mark === 100 ? 1 : undefined,
                   }}
                 />
               ))}
@@ -328,7 +299,7 @@ function BudgetCard({ cat, color, icon, spending, onSave, onClear }) {
         </div>
       )}
 
-      {/* ── Edit toggle link ── */}
+      {/* Edit toggle */}
       <button
         onClick={handleOpen}
         style={{
@@ -347,7 +318,7 @@ function BudgetCard({ cat, color, icon, spending, onSave, onClear }) {
         {open ? "▲ close" : limit > 0 ? "✎ edit limit" : "+ set limit"}
       </button>
 
-      {/* ── Expanded editor ── */}
+      {/* Expanded editor */}
       {open && (
         <div
           style={{
@@ -357,7 +328,6 @@ function BudgetCard({ cat, color, icon, spending, onSave, onClear }) {
             animation: "slideDown 0.18s ease",
           }}
         >
-          {/* Amount input */}
           <div
             style={{
               fontSize: 10,
@@ -369,7 +339,6 @@ function BudgetCard({ cat, color, icon, spending, onSave, onClear }) {
           >
             {isFixed ? "Fixed limit" : "Monthly limit"} (₹)
           </div>
-
           <div style={{ position: "relative", marginBottom: 12 }}>
             <span
               style={{
@@ -401,7 +370,6 @@ function BudgetCard({ cat, color, icon, spending, onSave, onClear }) {
                 outline: "none",
                 boxSizing: "border-box",
                 fontFamily: "inherit",
-                transition: "border-color 0.15s",
               }}
               onFocus={(e) => (e.target.style.borderColor = color + "66")}
               onBlur={(e) =>
@@ -450,11 +418,12 @@ function BudgetCard({ cat, color, icon, spending, onSave, onClear }) {
           <div style={{ display: "flex", gap: 8 }}>
             <button
               onClick={handleSave}
+              disabled={saving}
               style={{
                 flex: 1,
                 padding: "10px",
                 borderRadius: 9,
-                cursor: "pointer",
+                cursor: saving ? "not-allowed" : "pointer",
                 fontFamily: "inherit",
                 background: saved ? "rgba(16,185,129,0.15)" : color + "18",
                 border: `1px solid ${saved ? "rgba(16,185,129,0.35)" : color + "44"}`,
@@ -464,78 +433,79 @@ function BudgetCard({ cat, color, icon, spending, onSave, onClear }) {
                 transition: "all 0.2s",
               }}
             >
-              {saved ? "✓ saved!" : limit > 0 ? "update" : "set limit"}
+              {saving
+                ? "Saving…"
+                : saved
+                  ? "✓ saved!"
+                  : limit > 0
+                    ? "update"
+                    : "set limit"}
             </button>
-
             {limit > 0 && (
               <button
                 onClick={handleClear}
+                disabled={clearing}
                 style={{
                   padding: "10px 16px",
                   borderRadius: 9,
-                  cursor: "pointer",
+                  cursor: clearing ? "not-allowed" : "pointer",
                   background: "rgba(239,68,68,0.07)",
                   border: "1px solid rgba(239,68,68,0.18)",
                   color: "rgba(239,68,68,0.6)",
                   fontSize: 12,
                   fontFamily: "inherit",
-                  transition: "all 0.15s",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "rgba(239,68,68,0.14)";
-                  e.currentTarget.style.color = "#EF4444";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "rgba(239,68,68,0.07)";
-                  e.currentTarget.style.color = "rgba(239,68,68,0.6)";
                 }}
               >
-                clear
+                {clearing ? "…" : "clear"}
               </button>
             )}
           </div>
         </div>
       )}
-
-      <style>{`
-        @keyframes slideDown {
-          from { opacity: 0; transform: translateY(-6px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-      `}</style>
+      <style>{`@keyframes slideDown { from { opacity:0;transform:translateY(-6px); } to { opacity:1;transform:translateY(0); } }`}</style>
     </div>
   );
 }
 
 // ── Main component ────────────────────────────────────────────────────────
-export default function BudgetPage({
-  dashboardData,
-  transactions = [],
-  showToast,
-}) {
+export default function BudgetPage({ dashboardData, showToast }) {
   const [categories, setCategories] = useState([]);
+  const [budgets, setBudgets] = useState([]); // fetched from API
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState("monthly");
-  // tick bumps after every save/clear — forces BudgetCard remounts via key
-  const [tick, setTick] = useState(0);
 
-  const fetchCategories = useCallback(async () => {
+  // budgetMap: categoryName → { id, limitAmount, resetType }
+  // Rebuilt whenever the budgets array changes.
+  const budgetMap = useMemo(() => {
+    const map = {};
+    budgets.forEach((b) => {
+      map[b.categoryName] = b;
+    });
+    return map;
+  }, [budgets]);
+
+  // Fetch both categories and budgets in parallel on mount
+  const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await categoryAPI.getByType("EXPENSE");
-      setCategories(res.data);
+      const [catRes, budgetRes] = await Promise.all([
+        categoryAPI.getByType("EXPENSE"),
+        budgetAPI.getAll(),
+      ]);
+      setCategories(catRes.data);
+      setBudgets(budgetRes.data);
     } catch {
-      if (showToast) showToast("Failed to load categories", "error");
+      if (showToast) showToast("Failed to load budget data", "error");
     } finally {
       setLoading(false);
     }
   }, [showToast]);
 
   useEffect(() => {
-    fetchCategories();
-  }, [fetchCategories]);
+    fetchAll();
+  }, [fetchAll]);
 
-  // ── Spending per category, scaled to period ─────────────────────────
+  // ── Spending data from dashboard ─────────────────────────────────────
   const catSummary = useMemo(
     () => dashboardData?.categorySummary || {},
     [dashboardData],
@@ -544,16 +514,16 @@ export default function BudgetPage({
     () => Object.values(catSummary).reduce((s, v) => s + v, 0),
     [catSummary],
   );
+
   const periodSpend = useMemo(() => {
-    const raw =
-      period === "weekly"
-        ? dashboardData?.weeklySummary?.expenditure
-        : period === "yearly"
-          ? dashboardData?.yearlySummary?.expenditure
-          : dashboardData?.monthlySummary?.expenditure;
-    return raw || 0;
+    if (period === "weekly")
+      return dashboardData?.weeklySummary?.expenditure ?? 0;
+    if (period === "yearly")
+      return dashboardData?.yearlySummary?.expenditure ?? 0;
+    return dashboardData?.monthlySummary?.expenditure ?? 0;
   }, [period, dashboardData]);
 
+  // Scale all-time category totals to the selected period
   const catSpending = useMemo(() => {
     if (allTimeTotal === 0) return catSummary;
     const ratio = periodSpend / allTimeTotal;
@@ -565,7 +535,6 @@ export default function BudgetPage({
   }, [catSummary, allTimeTotal, periodSpend]);
 
   // ── Summary strip ────────────────────────────────────────────────────
-  // tick in deps so this re-runs after every save/clear
   const summary = useMemo(() => {
     const periodDiv =
       period === "weekly" ? 4 : period === "yearly" ? 1 / 12 : 1;
@@ -574,9 +543,9 @@ export default function BudgetPage({
       over = 0,
       warn = 0;
     categories.forEach((cat) => {
-      const { limit } = loadBudget(cat.name);
-      if (!limit) return;
-      const scaledLimit = limit / periodDiv;
+      const b = budgetMap[cat.name];
+      if (!b) return;
+      const scaledLimit = b.limitAmount / periodDiv;
       const s = catSpending[cat.name] || 0;
       const pct = (s / scaledLimit) * 100;
       budgeted += scaledLimit;
@@ -591,7 +560,34 @@ export default function BudgetPage({
       over,
       warn,
     };
-  }, [categories, catSpending, period, tick]); // eslint-disable-line
+  }, [categories, budgetMap, catSpending, period]);
+
+  // ── Handlers ─────────────────────────────────────────────────────────
+  const handleSave = useCallback(
+    async (categoryName, limitAmount, resetType) => {
+      await budgetAPI.upsert(categoryName, limitAmount, resetType);
+      // Re-fetch to get the server-assigned ID and updated timestamps
+      const res = await budgetAPI.getAll();
+      setBudgets(res.data);
+      if (showToast) showToast(`Budget for ${categoryName} saved`);
+    },
+    [showToast],
+  );
+
+  const handleClear = useCallback(
+    async (categoryName) => {
+      try {
+        await budgetAPI.deleteByCategory(categoryName);
+        setBudgets((prev) =>
+          prev.filter((b) => b.categoryName !== categoryName),
+        );
+        if (showToast) showToast(`Budget for ${categoryName} cleared`);
+      } catch {
+        if (showToast) showToast("Failed to clear budget", "error");
+      }
+    },
+    [showToast],
+  );
 
   const periodDiv = period === "weekly" ? 4 : period === "yearly" ? 1 / 12 : 1;
   const periodLabel =
@@ -600,9 +596,8 @@ export default function BudgetPage({
       : period === "yearly"
         ? "This year"
         : "This month";
-  const hasBudgets = categories.some((cat) => loadBudget(cat.name).limit > 0);
+  const hasBudgets = budgets.length > 0;
 
-  // ── Loading state ────────────────────────────────────────────────────
   if (loading)
     return (
       <div
@@ -626,7 +621,7 @@ export default function BudgetPage({
           }}
         />
         <span style={{ fontSize: 12, color: "rgba(255,255,255,0.25)" }}>
-          Loading categories…
+          Loading budgets…
         </span>
         <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
       </div>
@@ -634,7 +629,7 @@ export default function BudgetPage({
 
   return (
     <div className="budget-page-wrap">
-      {/* ── Header ── */}
+      {/* Header */}
       <div style={{ marginBottom: 28 }}>
         <h1
           style={{
@@ -648,12 +643,11 @@ export default function BudgetPage({
           Budget Goals
         </h1>
         <p style={{ fontSize: 13, color: "rgba(255,255,255,0.35)", margin: 0 }}>
-          Set spending limits per category. Limits are saved on this device
-          only.
+          Set spending limits per category — synced across all your devices.
         </p>
       </div>
 
-      {/* ── Period selector ── */}
+      {/* Period selector */}
       <div
         style={{
           display: "flex",
@@ -704,7 +698,7 @@ export default function BudgetPage({
         ))}
       </div>
 
-      {/* ── Summary strip ── */}
+      {/* Summary strip */}
       {hasBudgets && (
         <div
           style={{
@@ -783,7 +777,6 @@ export default function BudgetPage({
         </div>
       )}
 
-      {/* ── Empty categories state ── */}
       {categories.length === 0 ? (
         <div
           style={{
@@ -796,13 +789,7 @@ export default function BudgetPage({
           }}
         >
           <div style={{ fontSize: 40, marginBottom: 14 }}>📂</div>
-          <p
-            style={{
-              fontWeight: 500,
-              marginBottom: 8,
-              color: "rgba(255,255,255,0.4)",
-            }}
-          >
+          <p style={{ fontWeight: 500, color: "rgba(255,255,255,0.4)" }}>
             No expense categories yet
           </p>
           <p style={{ fontSize: 13 }}>
@@ -811,28 +798,23 @@ export default function BudgetPage({
         </div>
       ) : (
         <>
-          {/* ── Cards grid ── */}
           <div className="budget-cards-grid">
             {categories.map((cat, i) => {
               const scaledSpend = (catSpending[cat.name] || 0) / periodDiv;
-              const color = CAT_COLORS[i % CAT_COLORS.length];
-              const icon = CAT_ICONS[cat.name] || "📁";
               return (
                 <BudgetCard
-                  // key includes tick so card fully remounts after every save/clear
-                  key={`${cat.id}-${tick}`}
+                  key={cat.id}
                   cat={cat.name}
-                  color={color}
-                  icon={icon}
+                  color={CAT_COLORS[i % CAT_COLORS.length]}
+                  icon={CAT_ICONS[cat.name] || "📁"}
                   spending={scaledSpend}
-                  onSave={() => setTick((t) => t + 1)}
-                  onClear={() => setTick((t) => t + 1)}
+                  budget={budgetMap[cat.name] || null}
+                  onSave={handleSave}
+                  onClear={handleClear}
                 />
               );
             })}
           </div>
-
-          {/* ── Footer note ── */}
           <div
             style={{
               marginTop: 32,
@@ -841,31 +823,17 @@ export default function BudgetPage({
               color: "rgba(255,255,255,0.12)",
             }}
           >
-            Budget limits are saved on this device only and do not sync across
+            Budget limits are synced to your account and available on all
             devices.
           </div>
         </>
       )}
 
       <style>{`
-        .budget-page-wrap {
-          padding: 16px;
-          min-height: 100vh;
-          color: #E8EDF5;
-          font-family: 'DM Sans', 'Segoe UI', sans-serif;
-        }
-        .budget-cards-grid {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 10px;
-        }
-        @media (min-width: 500px) {
-          .budget-cards-grid { grid-template-columns: repeat(2, 1fr); }
-        }
-        @media (min-width: 900px) {
-          .budget-page-wrap { padding: 36px 40px; }
-          .budget-cards-grid { grid-template-columns: repeat(3, 1fr); }
-        }
+        .budget-page-wrap { padding: 16px; min-height: 100vh; color: #E8EDF5; font-family: 'DM Sans', 'Segoe UI', sans-serif; }
+        .budget-cards-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+        @media (min-width: 500px) { .budget-cards-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (min-width: 900px) { .budget-page-wrap { padding: 36px 40px; } .budget-cards-grid { grid-template-columns: repeat(3, 1fr); } }
         @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
     </div>
