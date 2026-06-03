@@ -240,6 +240,13 @@ export const transactionAPI = {
    */
   getFilteredTransactions: (params) =>
     api.get("/transactions/filter", { params: cleanParams(params) }),
+  getPagedTransactions: (
+    page = 0,
+    size = 25,
+    sortBy = "date",
+    sortDir = "desc",
+  ) =>
+    api.get("/transactions/paged", { params: { page, size, sortBy, sortDir } }),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

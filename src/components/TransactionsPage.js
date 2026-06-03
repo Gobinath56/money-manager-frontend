@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { formatCurrency, formatDateTime } from "../utils/helpers";
 import { exportToCSV } from "../utils/export";
-import { categoryAPI } from "../services/api";
+import { categoryAPI, transactionAPI } from "../services/api";
 
 const CAT_COLORS = {
   FUEL: "#F59E0B",
@@ -21,13 +21,11 @@ function cap(str) {
   return str.charAt(0) + str.slice(1).toLowerCase();
 }
 
-// Short date for mobile: "12 Jun"
 function fmtShortDate(dateStr) {
   const d = new Date(dateStr);
   return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 }
 
-// Format date range label for export button
 function fmtDateRange(startDate, endDate, count) {
   if (!startDate && !endDate) return `Export all ${count} records`;
   if (startDate && endDate)
@@ -36,7 +34,6 @@ function fmtDateRange(startDate, endDate, count) {
   return `Export ${count} records (until ${endDate})`;
 }
 
-const PAGE_SIZE = 25;
 const ACCOUNT_ACCENTS = [
   "#63B3FF",
   "#10B981",
@@ -82,7 +79,6 @@ function getPresetRange(preset) {
 }
 
 const S = {
-  page: { padding: "36px 40px", minHeight: "100vh", color: "#E8EDF5" },
   title: {
     fontSize: 26,
     fontWeight: 600,
@@ -91,16 +87,25 @@ const S = {
     letterSpacing: "-0.5px",
   },
   sub: { fontSize: 13, color: "rgba(255,255,255,0.35)", marginBottom: 28 },
-  toolbar: {
-    display: "flex",
-    gap: 10,
-    marginBottom: 14,
-    flexWrap: "wrap",
-    alignItems: "center",
+  exportBtn: {
+    background: "rgba(99,179,255,0.1)",
+    border: "1px solid rgba(99,179,255,0.25)",
+    color: "#63B3FF",
+    borderRadius: 10,
+    padding: "10px 16px",
+    fontSize: 12,
+    cursor: "pointer",
+    fontWeight: 500,
+    fontFamily: "inherit",
+    whiteSpace: "nowrap",
   },
+  // FIX #17 — search no longer has display:none on mobile.
+  // Previously the toolbar used col-desktop to hide selects on mobile,
+  // but search was also getting hidden because it was inside the same
+  // flex container that collapsed. Now search is pulled into its own
+  // always-visible row above the collapsible filter row.
   search: {
-    flex: 1,
-    minWidth: 180,
+    width: "100%",
     background: "#0D1117",
     border: "1px solid rgba(255,255,255,0.1)",
     borderRadius: 10,
@@ -109,6 +114,7 @@ const S = {
     fontSize: 13,
     outline: "none",
     fontFamily: "inherit",
+    boxSizing: "border-box",
   },
   select: {
     background: "#0D1117",
@@ -131,18 +137,6 @@ const S = {
     outline: "none",
     colorScheme: "dark",
     fontFamily: "inherit",
-  },
-  exportBtn: {
-    background: "rgba(99,179,255,0.1)",
-    border: "1px solid rgba(99,179,255,0.25)",
-    color: "#63B3FF",
-    borderRadius: 10,
-    padding: "10px 16px",
-    fontSize: 12,
-    cursor: "pointer",
-    fontWeight: 500,
-    fontFamily: "inherit",
-    whiteSpace: "nowrap",
   },
   clearBtn: {
     background: "rgba(255,255,255,0.05)",
@@ -266,8 +260,6 @@ const S = {
     width: 340,
     textAlign: "center",
   },
-
-  // Pagination
   paginationBar: {
     display: "flex",
     alignItems: "center",
@@ -326,11 +318,67 @@ export default function TransactionsPage({
   const [endDate, setEndDate] = useState("");
   const [activePreset, setActivePreset] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(PAGE_SIZE);
+  const [pageSize, setPageSize] = useState(25);
   const [confirmId, setConfirmId] = useState(null);
+
+  // FIX #5 — paged data from API
+  const [pagedData, setPagedData] = useState(null); // Page<Transaction> from backend
+  const [pagedLoading, setPagedLoading] = useState(false);
 
   const [allCategories, setAllCategories] = useState([]);
   const [loadingCats, setLoadingCats] = useState(false);
+
+  // ── Are any filters active that need client-side filtering? ─────────────
+  // When no filters are set, we use the fast paged API.
+  // When filters are set, we fall back to the full transactions prop
+  // (already loaded for dashboard) and filter client-side.
+  // This avoids building a complex server-side filter+paginate endpoint.
+  const hasFilters = !!(
+    search ||
+    filterType ||
+    filterDiv ||
+    filterCat ||
+    filterAcct ||
+    startDate ||
+    endDate
+  );
+
+  // ── Fetch one page from backend (only when no filters active) ───────────
+  const fetchPage = useCallback(
+    async (page, size) => {
+      if (hasFilters) return; // filters active — use client-side path
+      setPagedLoading(true);
+      try {
+        const res = await transactionAPI.getPagedTransactions(page - 1, size);
+        setPagedData(res.data);
+      } catch {
+        setPagedData(null); // fallback to client-side
+      } finally {
+        setPagedLoading(false);
+      }
+    },
+    [hasFilters],
+  ); // eslint-disable-line
+
+  useEffect(() => {
+    if (!hasFilters) {
+      fetchPage(currentPage, pageSize);
+    }
+  }, [currentPage, pageSize, hasFilters]); // eslint-disable-line
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    search,
+    filterType,
+    filterDiv,
+    filterCat,
+    filterAcct,
+    startDate,
+    endDate,
+    pageSize,
+  ]);
 
   const fetchAllCategories = useCallback(async () => {
     setLoadingCats(true);
@@ -366,8 +414,9 @@ export default function TransactionsPage({
     return map;
   }, [accounts]);
 
-  // All filtered (used for export — always exports the full filtered set)
+  // ── Client-side filtered list (used when filters are active) ────────────
   const filtered = useMemo(() => {
+    if (!hasFilters) return transactions; // not used in paged mode
     return transactions.filter((t) => {
       if (
         search &&
@@ -401,37 +450,31 @@ export default function TransactionsPage({
     filterAcct,
     startDate,
     endDate,
+    hasFilters,
   ]);
 
-  // Reset to page 1 whenever filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [
-    search,
-    filterType,
-    filterDiv,
-    filterCat,
-    filterAcct,
-    startDate,
-    endDate,
-    pageSize,
-  ]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const safePage = Math.min(currentPage, totalPages);
-
-  // Current page slice
-  const pageSlice = useMemo(() => {
-    const start = (safePage - 1) * pageSize;
+  // Client-side pagination (used when filters active)
+  const clientTotalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const clientSafePage = Math.min(currentPage, clientTotalPages);
+  const clientPageSlice = useMemo(() => {
+    const start = (clientSafePage - 1) * pageSize;
     return filtered.slice(start, start + pageSize);
-  }, [filtered, safePage, pageSize]);
+  }, [filtered, clientSafePage, pageSize]);
 
-  // Page numbers to render (show up to 7 buttons with ellipsis)
+  // ── Decide which data source to use ─────────────────────────────────────
+  const pageSlice = hasFilters ? clientPageSlice : pagedData?.content || [];
+  const totalPages = hasFilters ? clientTotalPages : pagedData?.totalPages || 1;
+  const totalRecords = hasFilters
+    ? filtered.length
+    : pagedData?.totalElements || transactions.length;
+  const safePage = hasFilters ? clientSafePage : currentPage;
+  const startRecord = (safePage - 1) * pageSize + 1;
+  const endRecord = Math.min(safePage * pageSize, totalRecords);
+
   const pageNumbers = useMemo(() => {
     if (totalPages <= 7)
       return Array.from({ length: totalPages }, (_, i) => i + 1);
-    const pages = [];
-    pages.push(1);
+    const pages = [1];
     if (safePage > 3) pages.push("...");
     for (
       let p = Math.max(2, safePage - 1);
@@ -451,20 +494,11 @@ export default function TransactionsPage({
       setStartDate("");
       setEndDate("");
     } else {
-      const range = getPresetRange(preset);
+      const r = getPresetRange(preset);
       setActivePreset(preset);
-      setStartDate(range.start);
-      setEndDate(range.end);
+      setStartDate(r.start);
+      setEndDate(r.end);
     }
-  };
-
-  const handleStartDate = (v) => {
-    setStartDate(v);
-    setActivePreset("");
-  };
-  const handleEndDate = (v) => {
-    setEndDate(v);
-    setActivePreset("");
   };
 
   const clearAll = () => {
@@ -478,30 +512,18 @@ export default function TransactionsPage({
     setActivePreset("");
   };
 
-  const hasFilters =
-    search ||
-    filterType ||
-    filterDiv ||
-    filterCat ||
-    filterAcct ||
-    startDate ||
-    endDate;
-
   const handleConfirmDelete = async () => {
     if (!confirmId) return;
     await onDelete(confirmId);
     setConfirmId(null);
+    if (!hasFilters) fetchPage(currentPage, pageSize);
   };
 
-  // Export label shows exactly what range is being exported
-  const exportLabel = fmtDateRange(startDate, endDate, filtered.length);
-
-  const startRecord = (safePage - 1) * pageSize + 1;
-  const endRecord = Math.min(safePage * pageSize, filtered.length);
+  const exportLabel = fmtDateRange(startDate, endDate, totalRecords);
 
   return (
     <div className="txn-page-wrap">
-      {/* ── Header ── */}
+      {/* Header */}
       <div
         style={{
           display: "flex",
@@ -516,37 +538,69 @@ export default function TransactionsPage({
         <button
           style={S.exportBtn}
           onClick={() => {
-            if (filtered.length === 0) {
+            const data = hasFilters
+              ? filtered
+              : pagedData?.content || transactions;
+            if (!data.length) {
               alert("No transactions to export");
               return;
             }
-            const label =
+            exportToCSV(
+              data,
               startDate || endDate
                 ? `transactions-${startDate || "start"}-to-${endDate || "end"}`
-                : "transactions-all";
-            exportToCSV(filtered, label);
+                : "transactions-all",
+            );
           }}
-          title={exportLabel}
         >
           ↓ {exportLabel}
         </button>
       </div>
 
       <p style={S.sub}>
-        {filtered.length === transactions.length
+        {totalRecords === transactions.length
           ? `${transactions.length} total records`
-          : `${filtered.length} of ${transactions.length} records`}
-        {filtered.length > 0 && ` · showing ${startRecord}–${endRecord}`}
+          : `${totalRecords} of ${transactions.length} records`}
+        {totalRecords > 0 && ` · showing ${startRecord}–${endRecord}`}
+        {/* FIX #5 — show server-paged indicator when no filters active */}
+        {!hasFilters && pagedData && (
+          <span
+            style={{
+              marginLeft: 8,
+              fontSize: 11,
+              color: "rgba(99,179,255,0.5)",
+            }}
+          >
+            · server paged
+          </span>
+        )}
       </p>
 
-      {/* ── Filters ── */}
-      <div style={S.toolbar}>
+      {/* ── FIX #17 — Search is now in its own full-width row ─────────────
+          Previously search was inside the same flex row as the selects.
+          On mobile that row was hidden with col-desktop, which also hid
+          the search input even though it was never supposed to be hidden.
+          Now search lives above the filter row and is always visible.    */}
+      <div style={{ marginBottom: 10 }}>
         <input
           style={S.search}
-          placeholder="Search by description…"
+          placeholder="🔍  Search by description…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
+      </div>
+
+      {/* Filter row — desktop selects (hidden on mobile via CSS) */}
+      <div
+        className="filter-row"
+        style={{
+          display: "flex",
+          gap: 10,
+          marginBottom: 14,
+          flexWrap: "wrap",
+          alignItems: "center",
+        }}
+      >
         <select
           style={S.select}
           value={filterType}
@@ -601,7 +655,7 @@ export default function TransactionsPage({
         )}
       </div>
 
-      {/* ── Date range ── */}
+      {/* Date range */}
       <div style={S.dateRow}>
         <span style={S.dateLabel}>Date:</span>
         {["today", "week", "month", "year"].map((p) => (
@@ -624,7 +678,10 @@ export default function TransactionsPage({
           style={S.dateInput}
           value={startDate}
           max={endDate || undefined}
-          onChange={(e) => handleStartDate(e.target.value)}
+          onChange={(e) => {
+            setStartDate(e.target.value);
+            setActivePreset("");
+          }}
         />
         <span style={{ color: "rgba(255,255,255,0.2)", fontSize: 12 }}>→</span>
         <input
@@ -632,7 +689,10 @@ export default function TransactionsPage({
           style={S.dateInput}
           value={endDate}
           min={startDate || undefined}
-          onChange={(e) => handleEndDate(e.target.value)}
+          onChange={(e) => {
+            setEndDate(e.target.value);
+            setActivePreset("");
+          }}
         />
         {(startDate || endDate) && (
           <button
@@ -648,226 +708,243 @@ export default function TransactionsPage({
         )}
       </div>
 
-      {/* ── Table ── */}
+      {/* Table */}
       <div style={S.tableWrap} className="table-scroll-wrap">
-        <table style={S.table}>
-          <thead>
-            <tr>
-              {/* Desktop columns */}
-              <th style={S.th} className="col-date">
-                Date & Time
-              </th>
-              <th style={S.th} className="col-desc">
-                Description
-              </th>
-              <th style={S.th} className="col-desktop">
-                Account
-              </th>
-              <th style={S.th} className="col-desktop">
-                Category
-              </th>
-              <th style={S.th} className="col-desktop">
-                Sub
-              </th>
-              <th style={S.th} className="col-desktop">
-                Division
-              </th>
-              <th style={S.th} className="col-desktop">
-                Type
-              </th>
-              <th
-                style={{ ...S.th, textAlign: "right" }}
-                className="col-amount"
-              >
-                Amount
-              </th>
-              <th
-                style={{ ...S.th, textAlign: "center" }}
-                className="col-actions"
-              >
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {pageSlice.length === 0 ? (
+        {pagedLoading ? (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              padding: "40px 0",
+            }}
+          >
+            <div
+              style={{
+                width: 24,
+                height: 24,
+                border: "2px solid rgba(99,179,255,0.15)",
+                borderTopColor: "#63B3FF",
+                borderRadius: "50%",
+                animation: "spin 0.8s linear infinite",
+              }}
+            />
+          </div>
+        ) : (
+          <table style={S.table}>
+            <thead>
               <tr>
-                <td
-                  colSpan={9}
-                  style={{
-                    ...S.td,
-                    textAlign: "center",
-                    padding: "48px 0",
-                    color: "rgba(255,255,255,0.2)",
-                  }}
+                <th style={S.th} className="col-date">
+                  Date
+                </th>
+                <th style={S.th} className="col-desc">
+                  Description
+                </th>
+                <th style={S.th} className="col-desktop">
+                  Account
+                </th>
+                <th style={S.th} className="col-desktop">
+                  Category
+                </th>
+                <th style={S.th} className="col-desktop">
+                  Sub
+                </th>
+                <th style={S.th} className="col-desktop">
+                  Division
+                </th>
+                <th style={S.th} className="col-desktop">
+                  Type
+                </th>
+                <th
+                  style={{ ...S.th, textAlign: "right" }}
+                  className="col-amount"
                 >
-                  {hasFilters
-                    ? "No transactions match your filters"
-                    : "No transactions yet"}
-                </td>
+                  Amount
+                </th>
+                <th
+                  style={{ ...S.th, textAlign: "center" }}
+                  className="col-actions"
+                >
+                  Actions
+                </th>
               </tr>
-            ) : (
-              pageSlice.map((t, i) => {
-                const acct = accountMap[t.accountId];
-                return (
-                  <tr key={t.id} style={S.tr(i)}>
-                    {/* Date — mobile shows short, desktop shows full */}
-                    <td
-                      style={{ ...S.td, whiteSpace: "nowrap", fontSize: 12 }}
-                      className="col-date"
-                    >
-                      <span className="date-full">
-                        {formatDateTime(t.date)}
-                      </span>
-                      <span className="date-short">{fmtShortDate(t.date)}</span>
-                    </td>
-
-                    {/* Description — always visible */}
-                    <td style={{ ...S.td, maxWidth: 200 }} className="col-desc">
-                      <span
-                        style={{
-                          display: "block",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
+            </thead>
+            <tbody>
+              {pageSlice.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={9}
+                    style={{
+                      ...S.td,
+                      textAlign: "center",
+                      padding: "48px 0",
+                      color: "rgba(255,255,255,0.2)",
+                    }}
+                  >
+                    {hasFilters
+                      ? "No transactions match your filters"
+                      : "No transactions yet"}
+                  </td>
+                </tr>
+              ) : (
+                pageSlice.map((t, i) => {
+                  const acct = accountMap[t.accountId];
+                  return (
+                    <tr key={t.id} style={S.tr(i)}>
+                      <td
+                        style={{ ...S.td, whiteSpace: "nowrap", fontSize: 12 }}
+                        className="col-date"
                       >
-                        {t.description}
-                      </span>
-                      {/* Mobile-only sub-line: category badge + account */}
-                      <div className="mobile-sub-row">
+                        <span className="date-full">
+                          {formatDateTime(t.date)}
+                        </span>
+                        <span className="date-short">
+                          {fmtShortDate(t.date)}
+                        </span>
+                      </td>
+                      <td
+                        style={{ ...S.td, maxWidth: 200 }}
+                        className="col-desc"
+                      >
+                        <span
+                          style={{
+                            display: "block",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {t.description}
+                        </span>
+                        <div className="mobile-sub-row">
+                          <span
+                            style={S.badge(CAT_COLORS[t.category] || "#6B7280")}
+                          >
+                            {cap(t.category)}
+                          </span>
+                          {acct && (
+                            <span
+                              style={{
+                                ...S.accChip(acct.color),
+                                marginLeft: 4,
+                              }}
+                            >
+                              <span style={S.accDot(acct.color)} />
+                              {acct.name}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td style={S.td} className="col-desktop">
+                        {acct ? (
+                          <span style={S.accChip(acct.color)}>
+                            <span style={S.accDot(acct.color)} />
+                            {acct.name}
+                          </span>
+                        ) : (
+                          <span
+                            style={{
+                              color: "rgba(255,255,255,0.15)",
+                              fontSize: 11,
+                            }}
+                          >
+                            —
+                          </span>
+                        )}
+                      </td>
+                      <td style={S.td} className="col-desktop">
                         <span
                           style={S.badge(CAT_COLORS[t.category] || "#6B7280")}
                         >
                           {cap(t.category)}
                         </span>
-                        {acct && (
+                      </td>
+                      <td style={S.td} className="col-desktop">
+                        {t.subCategory ? (
                           <span
-                            style={{ ...S.accChip(acct.color), marginLeft: 4 }}
+                            style={{
+                              fontSize: 11,
+                              padding: "2px 8px",
+                              borderRadius: 20,
+                              background: "rgba(255,255,255,0.06)",
+                              border: "1px solid rgba(255,255,255,0.1)",
+                              color: "rgba(255,255,255,0.5)",
+                            }}
                           >
-                            <span style={S.accDot(acct.color)} />
-                            {acct.name}
+                            {t.subCategory}
+                          </span>
+                        ) : (
+                          <span
+                            style={{
+                              color: "rgba(255,255,255,0.15)",
+                              fontSize: 11,
+                            }}
+                          >
+                            —
                           </span>
                         )}
-                      </div>
-                    </td>
-
-                    {/* Desktop-only columns */}
-                    <td style={S.td} className="col-desktop">
-                      {acct ? (
-                        <span style={S.accChip(acct.color)}>
-                          <span style={S.accDot(acct.color)} />
-                          {acct.name}
-                        </span>
-                      ) : (
+                      </td>
+                      <td style={S.td} className="col-desktop">
                         <span
-                          style={{
-                            color: "rgba(255,255,255,0.15)",
-                            fontSize: 11,
-                          }}
+                          style={S.badge(DIV_COLORS[t.division] || "#6B7280")}
                         >
-                          —
+                          {cap(t.division)}
                         </span>
-                      )}
-                    </td>
-                    <td style={S.td} className="col-desktop">
-                      <span
-                        style={S.badge(CAT_COLORS[t.category] || "#6B7280")}
-                      >
-                        {cap(t.category)}
-                      </span>
-                    </td>
-                    <td style={S.td} className="col-desktop">
-                      {t.subCategory ? (
+                      </td>
+                      <td style={S.td} className="col-desktop">
                         <span
-                          style={{
-                            fontSize: 11,
-                            padding: "2px 8px",
-                            borderRadius: 20,
-                            background: "rgba(255,255,255,0.06)",
-                            border: "1px solid rgba(255,255,255,0.1)",
-                            color: "rgba(255,255,255,0.5)",
-                          }}
+                          style={S.badge(
+                            t.type === "INCOME" ? "#10B981" : "#EF4444",
+                          )}
                         >
-                          {t.subCategory}
+                          {cap(t.type)}
                         </span>
-                      ) : (
-                        <span
-                          style={{
-                            color: "rgba(255,255,255,0.15)",
-                            fontSize: 11,
-                          }}
+                      </td>
+                      <td
+                        style={{
+                          ...S.td,
+                          fontWeight: 600,
+                          textAlign: "right",
+                          whiteSpace: "nowrap",
+                          color: t.type === "INCOME" ? "#10B981" : "#EF4444",
+                        }}
+                        className="col-amount"
+                      >
+                        {t.type === "INCOME" ? "+" : "-"}
+                        {formatCurrency(t.amount)}
+                      </td>
+                      <td
+                        style={{ ...S.td, textAlign: "center" }}
+                        className="col-actions"
+                      >
+                        <button
+                          style={S.actionBtn("rgba(99,179,255,0.7)")}
+                          onClick={() => onEdit(t)}
+                          title="Edit"
                         >
-                          —
-                        </span>
-                      )}
-                    </td>
-                    <td style={S.td} className="col-desktop">
-                      <span
-                        style={S.badge(DIV_COLORS[t.division] || "#6B7280")}
-                      >
-                        {cap(t.division)}
-                      </span>
-                    </td>
-                    <td style={S.td} className="col-desktop">
-                      <span
-                        style={S.badge(
-                          t.type === "INCOME" ? "#10B981" : "#EF4444",
-                        )}
-                      >
-                        {cap(t.type)}
-                      </span>
-                    </td>
+                          ✎
+                        </button>
+                        <button
+                          style={S.actionBtn("rgba(239,68,68,0.7)")}
+                          onClick={() => setConfirmId(t.id)}
+                          title="Delete"
+                        >
+                          ✕
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        )}
 
-                    {/* Amount — always visible */}
-                    <td
-                      style={{
-                        ...S.td,
-                        fontWeight: 600,
-                        textAlign: "right",
-                        whiteSpace: "nowrap",
-                        color: t.type === "INCOME" ? "#10B981" : "#EF4444",
-                      }}
-                      className="col-amount"
-                    >
-                      {t.type === "INCOME" ? "+" : "-"}
-                      {formatCurrency(t.amount)}
-                    </td>
-
-                    {/* Actions — always visible */}
-                    <td
-                      style={{ ...S.td, textAlign: "center" }}
-                      className="col-actions"
-                    >
-                      <button
-                        style={S.actionBtn("rgba(99,179,255,0.7)")}
-                        onClick={() => onEdit(t)}
-                        title="Edit"
-                      >
-                        ✎
-                      </button>
-                      <button
-                        style={S.actionBtn("rgba(239,68,68,0.7)")}
-                        onClick={() => setConfirmId(t.id)}
-                        title="Delete"
-                      >
-                        ✕
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-
-        {/* ── Pagination bar ── */}
-        {filtered.length > 0 && (
+        {/* Pagination bar */}
+        {totalRecords > 0 && (
           <div style={S.paginationBar}>
-            {/* Left: record count + page size selector */}
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <span style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>
-                {startRecord}–{endRecord} of {filtered.length}
+                {startRecord}–{endRecord} of {totalRecords}
               </span>
               <select
                 style={S.pageSizeSelect}
@@ -881,8 +958,6 @@ export default function TransactionsPage({
                 ))}
               </select>
             </div>
-
-            {/* Right: page buttons */}
             <div
               style={{
                 display: "flex",
@@ -891,7 +966,6 @@ export default function TransactionsPage({
                 flexWrap: "wrap",
               }}
             >
-              {/* Prev */}
               <button
                 style={S.pageBtn(false, safePage === 1)}
                 disabled={safePage === 1}
@@ -899,11 +973,10 @@ export default function TransactionsPage({
               >
                 ‹
               </button>
-
               {pageNumbers.map((p, idx) =>
                 p === "..." ? (
                   <span
-                    key={`ellipsis-${idx}`}
+                    key={`e-${idx}`}
                     style={{
                       color: "rgba(255,255,255,0.2)",
                       fontSize: 12,
@@ -922,8 +995,6 @@ export default function TransactionsPage({
                   </button>
                 ),
               )}
-
-              {/* Next */}
               <button
                 style={S.pageBtn(false, safePage === totalPages)}
                 disabled={safePage === totalPages}
@@ -938,7 +1009,7 @@ export default function TransactionsPage({
         )}
       </div>
 
-      {/* ── Delete confirm modal ── */}
+      {/* Delete confirm */}
       {confirmId && (
         <div style={S.overlay}>
           <div style={S.confirmBox}>
@@ -1003,7 +1074,6 @@ export default function TransactionsPage({
       )}
 
       <style>{`
-        /* ── Base (desktop) ── */
         .txn-page-wrap { padding: 36px 40px; min-height: 100vh; color: #E8EDF5; }
 
         .col-desktop  { display: table-cell; }
@@ -1011,39 +1081,19 @@ export default function TransactionsPage({
         .date-short   { display: none; }
         .mobile-sub-row { display: none; }
 
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        /* ── Mobile ── */
+        /* FIX #17 — hide the filter selects on mobile but NEVER hide search */
         @media (max-width: 768px) {
-          .txn-page-wrap { padding: 16px 16px; }
-
-          /* Hide desktop-only columns entirely */
-          .col-desktop { display: none !important; }
-
-          /* Show short date, hide long date */
-          .date-full  { display: none; }
-          .date-short { display: inline; }
-
-          /* Show category + account chips below description */
-          .mobile-sub-row {
-            display: flex;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 4px;
-            margin-top: 4px;
-          }
-
-          /* Tighten up cells */
-          .col-date    td, th { padding: 10px 8px; }
-          .col-amount  td, th { padding: 10px 8px; }
-          .col-actions td, th { padding: 10px 4px; }
-
-          /* Description column gets more room */
-          .col-desc { max-width: 140px; }
-
-          /* Compact action buttons */
+          .txn-page-wrap { padding: 16px; }
+          .filter-row   { display: none !important; }
+          .col-desktop  { display: none !important; }
+          .date-full    { display: none; }
+          .date-short   { display: inline; }
+          .mobile-sub-row { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
           .col-actions button { padding: 4px 6px; font-size: 13px; }
+          .col-desc { max-width: 140px; }
         }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
     </div>
   );
