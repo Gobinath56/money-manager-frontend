@@ -23,7 +23,7 @@ const api = axios.create({
   headers: { "Content-Type": "application/json" },
   // Fail fast instead of hanging forever.
   // 15 s is generous — most endpoints respond in < 500 ms.
-  timeout: 15000,
+  timeout: 60000,
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -29,10 +29,10 @@ const FEATURES = [
 ];
 
 const SLOW_MESSAGES = [
-  { after: 4, text: "Connecting to server…" },
-  { after: 10, text: "Server is waking up, please wait…" },
-  { after: 20, text: "Almost there — free servers take up to 60s to start…" },
-  { after: 40, text: "Still connecting… thank you for your patience." },
+  { after: 2, text: "Connecting to server…" },
+  { after: 7, text: "Server is waking up, please wait…" },
+  { after: 15, text: "Almost there — free servers take up to 60s to start…" },
+  { after: 35, text: "Still connecting… thank you for your patience." },
 ];
 
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
@@ -375,6 +375,8 @@ export default function LoginPage({ onSuccess }) {
       setError(
         err.response?.data?.message ||
           err.response?.data?.error ||
+          err.originalMessage ||
+          err.message ||
           "Something went wrong. Please try again.",
       );
     } finally {
